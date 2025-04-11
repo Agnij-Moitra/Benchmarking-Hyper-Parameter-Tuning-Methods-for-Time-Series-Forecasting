@@ -1,9 +1,8 @@
-# Source: https://github.com/rakshitha123/TSForecasting/blob/master/utils/data_loader.py
 from datetime import datetime
 from distutils.util import strtobool
-
+import pickle
+import sys
 import pandas as pd
-
 
 # Converts the contents in a .tsf file into a dataframe and returns it along with other meta-data of the dataset: frequency, horizon, whether the dataset contains missing values and whether the series have equal lengths
 #
@@ -95,7 +94,7 @@ def convert_tsf_to_dataframe(
 
                         if len(series) == 0:
                             raise Exception(
-                                "A given series should contains a set of comma separated numeric values. At least one numeric value should be there in a series. Missing values should be indicated with ? symbol"
+                                "A given series should contain a set of comma-separated numeric values. At least one numeric value should be there in a series. Missing values should be indicated with a '?' symbol"
                             )
 
                         numeric_series = []
@@ -110,7 +109,7 @@ def convert_tsf_to_dataframe(
                             numeric_series
                         ):
                             raise Exception(
-                                "All series values are missing. A given series should contains a set of comma separated numeric values. At least one numeric value should be there in a series."
+                                "All series values are missing. A given series should contain a set of comma-separated numeric values. At least one numeric value should be there in a series."
                             )
 
                         all_series.append(pd.Series(numeric_series).array)
@@ -154,3 +153,11 @@ def convert_tsf_to_dataframe(
             contain_missing_values,
             contain_equal_length,
         )
+
+if __name__ == "__main__":
+    file_paths = sys.argv[1:]
+    with open(r"./data/monash/monash-df.pkl", "wb") as pickle_file:
+        for file_path in file_paths:
+            file_name = file_path.split("/")[-1]
+            pickle.dump({file_name: convert_tsf_to_dataframe(file_path)}, pickle_file)            
+    print("Data has been pickled and saved as monash-df.pkl")

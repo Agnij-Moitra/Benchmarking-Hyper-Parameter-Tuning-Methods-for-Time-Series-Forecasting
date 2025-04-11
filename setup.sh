@@ -60,4 +60,6 @@ echo "Cleaning up .zip files..."
 find "$TARGET_DIR" -type f -name "*.zip" -exec rm -f {} \;
 echo "Cleanup complete."
 
-
+# Convert to dataframe as pickled obj in the format {key: file name, value: convert_tsf_to_dataframe(file name)}
+python init.py $(find ./data/monash/ -name "*.tsf")
+find "$TARGET_DIR" -type f -name "*.tsf" -exec rm -f {} \;
