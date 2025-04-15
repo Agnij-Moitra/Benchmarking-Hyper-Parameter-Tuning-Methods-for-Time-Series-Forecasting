@@ -57,8 +57,8 @@ def prepare_time_series(df, frequency):
         'daily': 'D',
         'weekly': 'W',
         'monthly': 'ME',
-        'quarterly': 'Q',
-        'yearly': 'Y'
+        'quarterly': 'QE',
+        'yearly': 'YE'
     }
 
     pandas_freq = freq_map.get(frequency)
@@ -71,12 +71,12 @@ def prepare_time_series(df, frequency):
             start_time = pd.to_datetime(row['start_timestamp'])
         except KeyError:
             start_time = pd.Timestamp("2000-01-01 00:00:00")
-
         values = row['series_value']
-        return pd.DataFrame(
+        yield pd.DataFrame(
             {series_name: pd.Series(
                 values, index=pd.date_range(
                     start=start_time, periods=len(values), freq=pandas_freq
-                    ))
-            }
+                )
             )
+            }
+        )
