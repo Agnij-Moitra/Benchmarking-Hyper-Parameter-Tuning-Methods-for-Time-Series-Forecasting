@@ -10,6 +10,8 @@ import pandas as pd
 # full_file_path_and_name - complete .tsf file path
 # replace_missing_vals_with - a term to indicate the missing values in series in the returning dataframe
 # value_column_name - Any name that is preferred to have as the name of the column containing series values in the returning dataframe
+
+
 def convert_tsf_to_dataframe(
     full_file_path_and_name,
     replace_missing_vals_with="NaN",
@@ -40,7 +42,8 @@ def convert_tsf_to_dataframe(
                             if (
                                 len(line_content) != 3
                             ):  # Attributes have both name and type
-                                raise Exception("Invalid meta-data specification.")
+                                raise Exception(
+                                    "Invalid meta-data specification.")
 
                             col_names.append(line_content[1])
                             col_types.append(line_content[2])
@@ -48,7 +51,8 @@ def convert_tsf_to_dataframe(
                             if (
                                 len(line_content) != 2
                             ):  # Other meta-data have only values
-                                raise Exception("Invalid meta-data specification.")
+                                raise Exception(
+                                    "Invalid meta-data specification.")
 
                             if line.startswith("@frequency"):
                                 frequency = line_content[1]
@@ -59,7 +63,8 @@ def convert_tsf_to_dataframe(
                                     strtobool(line_content[1])
                                 )
                             elif line.startswith("@equallength"):
-                                contain_equal_length = bool(strtobool(line_content[1]))
+                                contain_equal_length = bool(
+                                    strtobool(line_content[1]))
 
                     else:
                         if len(col_names) == 0:
@@ -87,7 +92,8 @@ def convert_tsf_to_dataframe(
                         full_info = line.split(":")
 
                         if len(full_info) != (len(col_names) + 1):
-                            raise Exception("Missing attributes/values in series.")
+                            raise Exception(
+                                "Missing attributes/values in series.")
 
                         series = full_info[len(full_info) - 1]
                         series = series.split(",")
@@ -101,7 +107,8 @@ def convert_tsf_to_dataframe(
 
                         for val in series:
                             if val == "?":
-                                numeric_series.append(replace_missing_vals_with)
+                                numeric_series.append(
+                                    replace_missing_vals_with)
                             else:
                                 numeric_series.append(float(val))
 
@@ -127,7 +134,8 @@ def convert_tsf_to_dataframe(
                             else:
                                 raise Exception(
                                     "Invalid attribute type."
-                                )  # Currently, the code supports only numeric, string and date types. Extend this as required.
+                                    # Currently, the code supports only numeric, string and date types. Extend this as required.
+                                )
 
                             if att_val is None:
                                 raise Exception("Invalid attribute value.")
@@ -154,10 +162,12 @@ def convert_tsf_to_dataframe(
             contain_equal_length,
         )
 
+
 if __name__ == "__main__":
     file_paths = sys.argv[1:]
     with open(r"./data/monash/monash-df.pkl", "wb") as pickle_file:
         for file_path in file_paths:
             file_name = file_path.split("/")[-1]
-            pickle.dump({file_name: convert_tsf_to_dataframe(file_path)}, pickle_file)            
+            pickle.dump(
+                {file_name: convert_tsf_to_dataframe(file_path)}, pickle_file)
     print("Data has been pickled and saved as monash-df.pkl")
