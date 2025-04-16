@@ -103,4 +103,3 @@ def prepare_time_series(df, frequency):
         except Exception as e:
             print(e)
             continue
-        
