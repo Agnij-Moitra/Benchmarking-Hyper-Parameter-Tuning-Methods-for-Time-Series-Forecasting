@@ -108,42 +108,42 @@ def prepare_time_series(df, frequency):
 
 def calculate_sma(data: pd.Series, n: int) -> pd.Series:
     """
-    Calculate Simple Moving Average (SMA) for a pandas Series.
+    ## Calculate Simple Moving Average (SMA) for a pandas Series.
 
-    Args:
-        data (pd.Series): Input pandas Series with numerical data
-        n (int): Window size for moving average
+    ### Args:
+        - data (`pd.Series`): Input pandas Series with numerical data
+        - n (`int`): Window size for moving average
 
-    Returns:
-        pd.Series: Series containing SMA values
+    ### Returns:
+        - `pd.Series`: Series containing SMA values
     """
     return data.rolling(window=n).mean()
 
 
 def calculate_ema(data: pd.Series, n: int) -> pd.Series:
     """
-    Calculate Exponential Moving Average (EMA) for a pandas Series.
+    ## Calculate Exponential Moving Average (EMA) for a pandas Series.
 
-    Args:
-        data (pd.Series): Input pandas Series with numerical data
-        n (int): Span (number of periods) for EMA calculation
+    ### Args:
+        - data (`pd.Series`): Input pandas Series with numerical data
+        - n (`int`): Span (number of periods) for EMA calculation
 
-    Returns:
-        pd.Series: Series containing EMA values
+    ### Returns:
+        - `pd.Series`: Series containing EMA values
     """
     return data.ewm(span=n, adjust=False).mean()
 
 
 def calculate_wma(data: pd.Series, n: int) -> pd.Series:
     """
-    Calculate Weighted Moving Average (WMA) for a pandas Series.
+    ## Calculate Weighted Moving Average (WMA) for a pandas Series.
 
-    Args:
-        data (pd.Series): Input pandas Series with numerical data
-        n (int): Window size for moving average
+    ### Args:
+        - data (`pd.Series`): Input pandas Series with numerical data
+        - n (`int`): Window size for moving average
 
-    Returns:
-        pd.Series: Series containing WMA values
+    ### Returns:
+        - `pd.Series`: Series containing WMA values
     """
     weights = np.arange(1, n + 1)
     return data.rolling(window=n).apply(
@@ -152,14 +152,14 @@ def calculate_wma(data: pd.Series, n: int) -> pd.Series:
 
 def calculate_hma(data: pd.Series, n: int) -> pd.Series:
     """
-    Calculate Hull Moving Average (HMA) for a pandas Series.
+    ## Calculate Hull Moving Average (HMA) for a pandas Series.
 
-    Args:
-        data (pd.Series): Input pandas Series with numerical data
-        n (int): Period for HMA calculation
+    ### Args:
+        - data (`pd.Series`): Input pandas Series with numerical data
+        - n (`int`): Period for HMA calculation
 
-    Returns:
-        pd.Series: Series containing HMA values
+    ### Returns:
+        - `pd.Series`: Series containing HMA values
     """
     intermediate = 2 * data.rolling(window=n // 2).apply(
         lambda x: np.dot(x, np.arange(1, n // 2 + 1)) /
@@ -469,4 +469,384 @@ def calculate_rmi(
                                             0).rolling(window=n).mean() / -momentum.where(momentum < 0,
                                                                                           0).rolling(window=n).mean()))
 
-# TODO: Price Momentum Oscillator
+
+def calculate_pmo(data: pd.Series, n: int = 20) -> pd.Series:
+    """
+    Calculate Price Momentum Oscillator (PMO) for a pandas Series.
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        n (int): Period for EMA calculation (default: 20)
+
+    Returns:
+        pd.Series: Series containing PMO values
+    """
+    = data - data.shift(1)
+    _diff = (- .shift(1)) * 100
+    return 10 * _diff.ewm(span=n, adjust=False).mean()
+
+
+def calculate_coppock(
+        data: pd.Series,
+        roc_short: int = 11,
+        roc_long: int = 14,
+        wma_period: int = 10) -> pd.Series:
+    """
+    Calculate Coppock Curve for a pandas Series.
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        roc_short (int): Period for short-term ROC (default: 11)
+        roc_long (int): Period for long-term ROC (default: 14)
+        wma_period (int): Period for WMA calculation (default: 10)
+
+    Returns:
+        pd.Series: Series containing Coppock Curve values
+    """
+    roc_sum = ((data - data.shift(roc_short)) / data.shift(roc_short)) * \
+        100 + ((data - data.shift(roc_long)) / data.shift(roc_long)) * 100
+    weights = np.arange(1, wma_period + 1)
+    return roc_sum.rolling(window=wma_period).apply(
+        lambda x: np.dot(x, weights) / weights.sum(), raw=True
+    )
+
+
+def calculate_tii(data: pd.Series, n: int = 20) -> pd.Series:
+    """
+    Calculate Trend Intensity Index (TII) for a pandas Series.
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        n (int): Period for SMA and deviation calculations (default: 20)
+
+    Returns:
+        pd.Series: Series containing TII values (0-100)
+    """
+    deviations = data - data.rolling(window=n).mean()
+    sum_pos_dev = deviations.where(deviations > 0, 0).rolling(window=n).sum()
+    sum_neg_dev = -deviations.where(deviations < 0, 0).rolling(window=n).sum()
+    return 100 * (sum_pos_dev - sum_neg_dev) / (sum_pos_dev + sum_neg_dev)
+
+
+def calculate_dpo(data: pd.Series, n: int = 20) -> pd.Series:
+    """
+    Calculate Detrended Price Oscillator (DPO) for a pandas Series.
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        n (int): Period for SMA calculation (default: 20)
+
+    Returns:
+        pd.Series: Series containing DPO values
+    """
+    return data - data.rolling(window=n).mean().shift(-(n // 2 + 1))
+
+
+def calculate_regression_slope(data: pd.Series, n: int = 20) -> pd.Series:
+    """
+    Calculate the slope of the Regression Curve for a pandas Series.
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        n (int): Period for regression calculation (default: 20)
+
+    Returns:
+        pd.Series: Series containing regression slope values
+    """
+    # Initialize output series
+    slopes = pd.Series(index=data.index, dtype=float)
+    x = np.arange(n)
+    for i in range(n - 1, len(data)):
+        y = data.iloc[i - n + 1:i + 1].values
+        if len(y) == n and not np.any(np.isnan(y)):
+            slopes.iloc[i] = np.polyfit(x, y, 1)[0]
+    return slopes
+
+
+def calculate_ulcer_index(data: pd.Series, n: int = 14) -> pd.Series:
+    """
+    Calculate Ulcer Index for a pandas Series.
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        n (int): Period for Ulcer Index calculation (default: 14)
+
+    Returns:
+        pd.Series: Series containing Ulcer Index values
+    """
+    highest_high = data.rolling(window=n).max()
+    drawdown_squared = ((data - highest_high) / highest_high) ** 2
+    return np.sqrt(drawdown_squared.rolling(window=n).sum() / n)
+
+
+def calculate_vhf(data: pd.Series, n: int = 28) -> pd.Series:
+    """
+    Calculate Vertical Horizontal Filter (VHF) for a pandas Series.
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        n (int): Period for VHF calculation (default: 28)
+
+    Returns:
+        pd.Series: Series containing VHF values
+    """
+    return (data.rolling(window=n).max() - data.rolling(window=n).min()
+            ) / abs(data.diff()).rolling(window=n).sum()
+
+
+def calculate_aroon_up(data: pd.Series, n: int = 25) -> pd.Series:
+    """
+    Calculate Aroon Up Indicator for a pandas Series, adapted for peak .
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        n (int): Period for Aroon Up calculation (default: 25)
+
+    Returns:
+        pd.Series: Series containing Aroon Up values
+    """
+    aroon_up = pd.Series(index=data.index, dtype=float)
+    for i in range(n - 1, len(data)):
+        aroon_up.iloc[i] = (
+            (1 + np.argmax(data.iloc[i - n + 1:i + 1])) / n) * 100
+    return aroon_up
+
+
+def calculate_aroon_down(data: pd.Series, n: int = 25) -> pd.Series:
+    """
+    Calculate Aroon Down Indicator for a pandas Series, adapted for peak .
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        n (int): Period for Aroon Down calculation (default: 25)
+
+    Returns:
+        pd.Series: Series containing Aroon Down values
+    """
+    aroon_down = pd.Series(index=data.index, dtype=float)
+    for i in range(n - 1, len(data)):
+        aroon_down.iloc[i] = (
+            (1 + np.argmin(data.iloc[i - n + 1:i + 1])) / n) * 100
+    return aroon_down
+
+
+def calculate_aroon_oscillator(data: pd.Series, n: int = 25) -> pd.Series:
+    """
+    Calculate Aroon Oscillator for a pandas Series, adapted for peak .
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        n (int): Period for Aroon calculation (default: 25)
+
+    Returns:
+        pd.Series: Series containing Aroon Oscillator values
+    """
+    aroon_up = pd.Series(index=data.index, dtype=float)
+    aroon_down = pd.Series(index=data.index, dtype=float)
+    for i in range(n - 1, len(data)):
+        window = data.iloc[i - n + 1:i + 1]
+        aroon_up.iloc[i] = (
+            (1 + np.argmax(window)) / n) * 100
+        aroon_down.iloc[i] = (
+            (1 + np.argmin(window)) / n) * 100
+    return aroon_up - aroon_down
+
+
+def calculate_vortex_plus(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n: int = 14) -> pd.Series:
+    """
+    Calculate Vortex Plus (VI+) Indicator for pandas Series of high and low data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high  data
+        data_low (pd.Series): Input pandas Series with low  data
+        n (int): Period for Vortex Plus calculation (default: 14)
+
+    Returns:
+        pd.Series: Series containing Vortex Plus (VI+) values
+    """
+    return abs(data_high - data_low.shift(1)).rolling(window=n).sum() / pd.concat([
+        (data_high - data_low),
+        abs(data_high - data_high.shift(1)),
+        abs(data_low - data_low.shift(1))
+    ], axis=1).max(axis=1).rolling(window=n).sum()
+
+
+def calculate_vortex_minus(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n: int = 14) -> pd.Series:
+    """
+    Calculate Vortex Minus (VI-) Indicator for pandas Series of high and low data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high data
+        data_low (pd.Series): Input pandas Series with low data
+        n (int): Period for Vortex Minus calculation (default: 14)
+
+    Returns:
+        pd.Series: Series containing Vortex Minus (VI-) values
+    """
+    return abs(data_low - data_high.shift(1)).rolling(window=n).sum() / pd.concat([
+        (data_high - data_low),
+        abs(data_high - data_high.shift(1)),
+        abs(data_low - data_low.shift(1))
+    ], axis=1).max(axis=1).rolling(window=n).sum()
+
+
+def calculate_mass_index(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n: int = 25,
+        ema_period: int = 9) -> pd.Series:
+    """
+    Calculate Mass Index for pandas Series of high and low data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high  data
+        data_low (pd.Series): Input pandas Series with low  data
+        n (int): Period for Mass Index calculation (default: 25)
+        ema_period (int): Period for EMA calculations (default: 9)
+
+    Returns:
+        pd.Series: Series containing Mass Index values
+    """
+    hl_range = data_high - data_low
+    ema1 = hl_range.ewm(span=ema_period, adjust=False).mean()
+    ratio = ema1 / ema1.ewm(span=ema_period, adjust=False).mean()
+    return ratio.rolling(window=n).sum()
+
+
+def calculate_mass_index(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n: int = 25,
+        ema_period: int = 9) -> pd.Series:
+    """
+    Calculate Mass Index for pandas Series of high and low data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high data
+        data_low (pd.Series): Input pandas Series with low data
+        n (int): Period for Mass Index summation (default: 25)
+        ema_period (int): Period for EMA calculations (default: 9)
+
+    Returns:
+        pd.Series: Series containing Mass Index values
+    """
+    hl_range = data_high - data_low
+    ema1 = hl_range.ewm(span=ema_period, adjust=False).mean()
+    ratio = ema1 / ema1.ewm(span=ema_period, adjust=False).mean()
+    return ratio.rolling(window=n).sum()
+
+
+def calculate_clv(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series) -> pd.Series:
+    """
+    Calculate Close Location Value (CLV) for pandas Series of high, low, and close data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high data
+        data_low (pd.Series): Input pandas Series with low data
+        data_close (pd.Series): Input pandas Series with close data
+
+    Returns:
+        pd.Series: Series containing CLV values
+    """
+    denominator = data_high - data_low
+    return (2 * data_close - data_low - data_high) / \
+        denominator.where(denominator != 0, 1)
+
+
+def calculate_bop(
+        data_open: pd.Series,
+        data_close: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series) -> pd.Series:
+    """
+    Calculate Balance of Power (BOP) for pandas Series of open, close, high, and low data.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open data
+        data_close (pd.Series): Input pandas Series with close data
+        data_high (pd.Series): Input pandas Series with high data
+        data_low (pd.Series): Input pandas Series with low data
+
+    Returns:
+        pd.Series: Series containing BOP values
+    """
+    denominator = data_high - data_low
+    return (data_close - data_open) / denominator.where(denominator != 0, 1)
+
+
+def calculate_bull_power(data_high: pd.Series, n: int = 13) -> pd.Series:
+    """
+    Calculate Elder Ray Bull Power for pandas Series of high data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high data
+        n (int): Period for EMA calculation (default: 13)
+
+    Returns:
+        pd.Series: Series containing Bull Power values
+    """
+    return data_high - data_high.ewm(span=n, adjust=False).mean()
+
+
+def calculate_bear_power(data_low: pd.Series, n: int = 13) -> pd.Series:
+    """
+    Calculate Elder Ray Bear Power for pandas Series of low data.
+
+    Args:
+        data_low (pd.Series): Input pandas Series with low data
+        n (int): Period for EMA calculation (default: 13)
+
+    Returns:
+        pd.Series: Series containing Bear Power values
+    """
+    return data_low - data_low.ewm(span=n, adjust=False).mean()
+
+
+def calculate_heikin_ashi_close(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series) -> pd.Series:
+    """Calculate Heikin Ashi Close."""
+    return (data_open + data_high + data_low + data_close) / 4
+
+
+def calculate_heikin_ashi_open(
+        data_open: pd.Series,
+        ha_close_series: pd.Series) -> pd.Series:
+    """Calculate Heikin Ashi Open."""
+    ha_open_series = pd.Series(index=data_open.index, dtype=float)
+    for i in range(len(data_open)):
+        if i == 0:
+            ha_open_series.iloc[i] = data_open.iloc[i]
+        else:
+            ha_open_series.iloc[i] = (
+                ha_open_series.iloc[i - 1] + ha_close_series.iloc[i - 1]) / 2
+    return ha_open_series
+
+
+def calculate_heikin_ashi_high(
+        data_high: pd.Series,
+        ha_open_series: pd.Series,
+        ha_close_series: pd.Series) -> pd.Series:
+    """Calculate Heikin Ashi High."""
+    return pd.concat([data_high, ha_open_series,
+                     ha_close_series], axis=1).max(axis=1)
+
+
+def calculate_heikin_ashi_low(
+        data_low: pd.Series,
+        ha_open_series: pd.Series,
+        ha_close_series: pd.Series) -> pd.Series:
+    """Calculate Heikin Ashi Low."""
+    return pd.concat(
+        [data_low, ha_open_series, ha_close_series], axis=1).min(axis=1)
