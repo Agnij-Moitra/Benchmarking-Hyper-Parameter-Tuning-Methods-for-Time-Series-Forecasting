@@ -1525,8 +1525,8 @@ def calculate_tsi(data: pd.Series, r: int = 25, s: int = 13) -> pd.Series:
 
 
 def calculate_kst(data: pd.Series,
-                  roc_periods: list = [10, 15, 20, 30],
-                  smoothing_periods: list = [10, 10, 10, 15]) -> pd.Series:
+                  roc_periods: list = [10, 15, 20, 30, 50],
+                  smoothing_periods: list = [5, 10, 15, 20, 25]) -> pd.Series:
     """
     Calculate the Know Sure Thing (KST) indicator.
 
