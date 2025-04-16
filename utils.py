@@ -7,14 +7,14 @@ def yield_data(pickle_file_path="./data/monash/monash-df.pkl"):
     ## Generator function to yield objects one at a time from a pickle file.
 
     ### Args:
-        - pickle_file_path (str): Path to the pickle file.
+        - pickle_file_path (`str`): Path to the pickle file.
 
     ### Yields:
-        - dict: A dictionary with file name, df, freq as keys.
+        - `dict`: A dictionary with file name, df, freq as keys.
 
     ### Raises:
-        - FileNotFoundError: If the pickle file doesn't exist.
-        - pickle.UnpicklingError: If the pickle file is corrupted.
+        - `FileNotFoundError`: If the pickle file doesn't exist.
+        - `pickle.UnpicklingError`: If the pickle file is corrupted.
     """
     try:
         with open(pickle_file_path, "rb") as f:
@@ -32,7 +32,7 @@ def yield_data(pickle_file_path="./data/monash/monash-df.pkl"):
     except FileNotFoundError:
         raise FileNotFoundError(f"Pickle file not found: {pickle_file_path}")
     except pickle.UnpicklingError:
-        raise pickle.UnpicklingError("Corrupted pickle file.")
+        raise pickle.UnpicklingError("Corrupted pickle file. Re-run setup.sh")
 
 
 def prepare_time_series(df, frequency):
@@ -40,14 +40,11 @@ def prepare_time_series(df, frequency):
     ## Generator function to yield individual time series DataFrames from a DataFrame with series_value lists.
 
     ### Args:
-        - df (pd.DataFrame): DataFrame with series_name, start_timestamp, series_value.
-        - frequency (str): Frequency of the series (e.g., '4_seconds', 'half_hourly', 'daily').
+        - df (`pd.DataFrame`): DataFrame with series_name, start_timestamp, series_value.
+        - frequency (`str`): Frequency of the series (e.g., '4_seconds', 'half_hourly', 'daily').
 
     ### Yields:
-        - pd.DataFrame: A DataFrame with timestamps as index and a single column for the series.
-
-    ### Raises:
-        - ValueError: If the frequency is unsupported.
+        - `pd.DataFrame`: A DataFrame with timestamps as index and a single column for the series.
     """
     freq_map = {
         '4_seconds': '4s',
@@ -63,7 +60,7 @@ def prepare_time_series(df, frequency):
 
     pandas_freq = freq_map[frequency]
     for _, row in df.iterrows():
-        start_time = pd.Timestamp.min  # prevent OverflowError datetime error
+        start_time = pd.Timestamp.min
         values = row['series_value']
         try:
             yield pd.DataFrame(
