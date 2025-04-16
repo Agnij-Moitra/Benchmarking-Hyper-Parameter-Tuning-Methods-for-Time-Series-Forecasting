@@ -74,6 +74,35 @@ def prepare_time_series(df, frequency):
                 )
                 }
             )
+        except (pd.errors.OutOfBoundsDatetime, OverflowError):
+            try:
+                lo, hi = 1, len(values)
+                max_len = 0
+
+                while lo <= hi:
+                    mid = (lo + hi) // 2
+                    try:
+                        pd.date_range(start=start_time,
+                                      periods=mid, freq=pandas_freq)
+                        max_len = mid
+                        lo = mid + 1
+                    except (pd.errors.OutOfBoundsDatetime, OverflowError):
+                        hi = mid - 1
+
+                if max_len == 0:
+                    continue
+                yield pd.DataFrame(
+                    {row['series_name']: pd.Series(
+                        values[:max_len], index=pd.date_range(
+                            start=start_time, periods=max_len, freq=pandas_freq
+                        )
+                    )
+                    }
+                )
+            except Exception as inner_e:
+                print(
+                    f"Failed to truncate and recover series {row['series_name']}: {str(inner_e)}")
+                continue
         except Exception as e:
-            print(f"Error creating DataFrame: {str(e)}")
+            print(e)
             continue
