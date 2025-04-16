@@ -21,7 +21,7 @@ def yield_data(pickle_file_path="./data/monash/monash-df.pkl"):
             while True:
                 try:
                     obj = pickle.load(f)
-                    items = [i for i in obj.items()][0]
+                    items = list(obj.items())[0]
                     yield {
                         "name": items[0].split('.')[0],
                         "df": items[1][0],
@@ -61,22 +61,19 @@ def prepare_time_series(df, frequency):
         'yearly': 'YE'
     }
 
-    pandas_freq = freq_map.get(frequency)
-    if pandas_freq is None:
-        raise ValueError(f"Unsupported frequency: {frequency}")
-
+    pandas_freq = freq_map[frequency]
     for _, row in df.iterrows():
-        series_name = row['series_name']
-        try:
-            start_time = pd.to_datetime(row['start_timestamp'])
-        except KeyError:
-            start_time = pd.Timestamp("2000-01-01 00:00:00")
+        start_time = pd.Timestamp.min  # prevent OverflowError datetime error
         values = row['series_value']
-        yield pd.DataFrame(
-            {series_name: pd.Series(
-                values, index=pd.date_range(
-                    start=start_time, periods=len(values), freq=pandas_freq
+        try:
+            yield pd.DataFrame(
+                {row['series_name']: pd.Series(
+                    values, index=pd.date_range(
+                        start=start_time, periods=len(values), freq=pandas_freq
+                    )
                 )
+                }
             )
-            }
-        )
+        except Exception as e:
+            print(f"Error creating DataFrame: {str(e)}")
+            continue

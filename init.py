@@ -11,6 +11,15 @@ import pandas as pd
 # replace_missing_vals_with - a term to indicate the missing values in series in the returning dataframe
 # value_column_name - Any name that is preferred to have as the name of the column containing series values in the returning dataframe
 
+# Adapted from https://github.com/rakshitha123/TSForecasting/blob/master/utils/data_loader.py
+"""
+@InProceedings{godahewa2021monash,
+              author = "Godahewa, Rakshitha and Bergmeir, Christoph and Webb, Geoffrey I. and Hyndman, Rob J. and Montero-Manso, Pablo",
+              title = "Monash Time Series Forecasting Archive",
+              booktitle = "Neural Information Processing Systems Track on Datasets and Benchmarks",
+              year = "2021"
+            }
+"""
 
 def convert_tsf_to_dataframe(
     full_file_path_and_name,
