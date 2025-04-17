@@ -379,7 +379,7 @@ def calculate_stochastic_rsi_k(
     rsi = calculate_rsi(data=data, n=rsi_period)
     lowest_rsi = rsi.rolling(window=stoch_period).min()
     highest_rsi = rsi.rolling(window=stoch_period).max()
-    return (((rsi - lowest_rsi) / (highest_rsi - lowest_rsi)) * \
+    return (((rsi - lowest_rsi) / (highest_rsi - lowest_rsi)) *
             100).rolling(window=smooth_k).mean().rolling(window=smooth_d).mean()
 
 
@@ -1038,8 +1038,8 @@ def commodity_channel_index(data_high: pd.Series,
         pd.Series: CCI values
     """
     typical_price = (data_high + data_low + data_close) / 3
-    return (typical_price - typical_price.rolling(window=period).mean()) / (0.015 * \
-            typical_price.rolling(window=period).apply(lambda x: pd.Series(x).mad(), raw=False))
+    return (typical_price - typical_price.rolling(window=period).mean()) / (0.015 *
+                                                                            typical_price.rolling(window=period).apply(lambda x: pd.Series(x).mad(), raw=False))
 
 
 def chande_momentum_oscillator(
@@ -2139,8 +2139,8 @@ def calculate_supertrend_line(
         elif data_close.iloc[i] < lower_band.iloc[i - 1]:
             supertrend.iloc[i] = upper_band.iloc[i]
         else:
-            supertrend.iloc[i] = lower_band.iloc[i] if supertrend.iloc[i -
-                                                                       1] == lower_band.iloc[i - 1] else upper_band.iloc[i]
+            supertrend.iloc[i] = lower_band.iloc[i] if supertrend.iloc[i - \
+                1] == lower_band.iloc[i - 1] else upper_band.iloc[i]
 
     return supertrend
 
@@ -2838,8 +2838,8 @@ def calculate_ml_rsi_overbought(
                         indices.append(i - j)
                         if i - j + 5 < len(data_close) and not np.isnan(
                                 data_close.iloc[i - j + 5]) and not np.isnan(data_close.iloc[i - j]):
-                            future_return = data_close.iloc[i - \
-                                j + 5] - data_close.iloc[i - j]
+                            future_return = data_close.iloc[i -
+                                                            j + 5] - data_close.iloc[i - j]
                             if future_return > data_close.iloc[i - j] * 0.02:
                                 overbought_candidates.append(
                                     standard_rsi.iloc[i - j])
@@ -3061,8 +3061,8 @@ def calculate_ml_rsi_oversold(
                         indices.append(i - j)
                         if i - j + 5 < len(data_close) and not np.isnan(
                                 data_close.iloc[i - j + 5]) and not np.isnan(data_close.iloc[i - j]):
-                            future_return = data_close.iloc[i - \
-                                j + 5] - data_close.iloc[i - j]
+                            future_return = data_close.iloc[i -
+                                                            j + 5] - data_close.iloc[i - j]
                             if future_return < data_close.iloc[i - j] * -0.02:
                                 oversold_candidates.append(
                                     standard_rsi.iloc[i - j])
@@ -3316,8 +3316,8 @@ def calculate_williams_percent_r(
         raise ValueError("Length must be at least 1")
     max_high = data_high.rolling(window=length).max()
     min_low = data_low.rolling(window=length).min()
-    percent_r = 100 * (data_close - max_high) / (max_high -
-                                                 min_low).where(max_high != min_low, np.nan)
+    percent_r = 100 * (data_close - max_high) / (max_high - \
+                       min_low).where(max_high != min_low, np.nan)
     return percent_r
 
 
@@ -3350,8 +3350,8 @@ def calculate_williams_percent_r_signal(
         raise ValueError("Length must be at least 1")
     max_high = data_high.rolling(window=length).max()
     min_low = data_low.rolling(window=length).min()
-    percent_r = 100 * (data_close - max_high) / (max_high -
-                                                 min_low).where(max_high != min_low, np.nan)
+    percent_r = 100 * (data_close - max_high) / (max_high - \
+                       min_low).where(max_high != min_low, np.nan)
     signal = pd.Series(0, index=data_close.index, dtype=int)
     signal[percent_r > -20] = 1
     signal[percent_r < -80] = -1
@@ -4806,3 +4806,376 @@ def calculate_choppiness_index(
     ci = ci.shift(offset)
 
     return ci
+
+
+def calculate_chande_kroll_stop_long(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        p: int = 10,
+        x: int = 1,
+        q: int = 9) -> pd.Series:
+    """
+    Calculate Stop Long line of the Chande Kroll Stop indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        p (int): ATR and lookback period for initial calculation (default: 10, min: 1)
+        x (int): ATR coefficient (default: 1, min: 1)
+        q (int): Stop lookback period (default: 9, min: 1)
+
+    Returns:
+        pd.Series: Series containing Stop Long values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if p < 1 or x < 1 or q < 1:
+        raise ValueError("Parameters p, x, and q must be at least 1")
+    tr1 = data_high - data_low
+    tr2 = np.abs(data_high - data_close.shift(1))
+    tr3 = np.abs(data_low - data_close.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=p).mean()
+    first_low_stop = data_low.rolling(window=p).min() + x * atr
+    stop_long = first_low_stop.rolling(window=q).min()
+
+    return stop_long
+
+
+def calculate_chande_kroll_stop_short(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        p: int = 10,
+        x: int = 1,
+        q: int = 9) -> pd.Series:
+    """
+    Calculate Stop Short line of the Chande Kroll Stop indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        p (int): ATR and lookback period for initial calculation (default: 10, min: 1)
+        x (int): ATR coefficient (default: 1, min: 1)
+        q (int): Stop lookback period (default: 9, min: 1)
+
+    Returns:
+        pd.Series: Series containing Stop Short values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if p < 1 or x < 1 or q < 1:
+        raise ValueError("Parameters p, x, and q must be at least 1")
+    tr1 = data_high - data_low
+    tr2 = np.abs(data_high - data_close.shift(1))
+    tr3 = np.abs(data_low - data_close.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=p).mean()
+
+    first_high_stop = data_high.rolling(window=p).max() - x * atr
+    stop_short = first_high_stop.rolling(window=q).max()
+
+    return stop_short
+
+
+def calculate_bull_bear_power(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 13) -> pd.Series:
+    """
+    Calculate Bull Bear Power (BBP) indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for EMA calculation (default: 13, min: 1)
+
+    Returns:
+        pd.Series: Series containing BBP values (Bull Power + Bear Power), aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+    ema_close = data_close.ewm(span=length, adjust=False).mean()
+    bull_power = data_high - ema_close
+    bear_power = data_low - ema_close
+    bbp = bull_power + bear_power
+
+    return bbp
+
+
+def calculate_bbw(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 20,
+        mult: float = 2.0) -> pd.Series:
+    """
+    Calculate Bollinger BandWidth (BBW) as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for SMA and standard deviation (default: 20, min: 1)
+        mult (float): Standard deviation multiplier (default: 2.0, min: 0.001, max: 50)
+
+    Returns:
+        pd.Series: Series containing BBW values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+
+    if mult < 0.001 or mult > 50:
+        raise ValueError("Multiplier must be between 0.001 and 50")
+    src = data_close
+    basis = src.rolling(window=length).mean()
+    dev = mult * src.rolling(window=length).std()
+    upper = basis + dev
+    lower = basis - dev
+    bbw = ((upper - lower) / basis.where(basis != 0, np.nan)) * 100
+
+    return bbw
+
+
+def calculate_highest_expansion(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 20,
+        mult: float = 2.0,
+        expansion_length: int = 125) -> pd.Series:
+    """
+    Calculate Highest Expansion of Bollinger BandWidth as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for SMA and standard deviation (default: 20, min: 1)
+        mult (float): Standard deviation multiplier (default: 2.0, min: 0.001, max: 50)
+        expansion_length (int): Lookback period for highest BBW (default: 125, min: 1)
+
+    Returns:
+        pd.Series: Series containing Highest Expansion values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1 or expansion_length < 1:
+        raise ValueError("Length parameters must be at least 1")
+
+    if mult < 0.001 or mult > 50:
+        raise ValueError("Multiplier must be between 0.001 and 50")
+    src = data_close
+    basis = src.rolling(window=length).mean()
+    dev = mult * src.rolling(window=length).std()
+    upper = basis + dev
+    lower = basis - dev
+    bbw = ((upper - lower) / basis.where(basis != 0, np.nan)) * 100
+    highest_expansion = bbw.rolling(window=expansion_length).max()
+
+    return highest_expansion
+
+
+def calculate_lowest_contraction(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 20,
+        mult: float = 2.0,
+        contraction_length: int = 125) -> pd.Series:
+    """
+    Calculate Lowest Contraction of Bollinger BandWidth as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for SMA and standard deviation (default: 20, min: 1)
+        mult (float): Standard deviation multiplier (default: 2.0, min: 0.001, max: 50)
+        contraction_length (int): Lookback period for lowest BBW (default: 125, min: 1)
+
+    Returns:
+        pd.Series: Series containing Lowest Contraction values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1 or contraction_length < 1:
+        raise ValueError("Length parameters must be at least 1")
+
+    if mult < 0.001 or mult > 50:
+        raise ValueError("Multiplier must be between 0.001 and 50")
+    src = data_close
+    basis = src.rolling(window=length).mean()
+    dev = mult * src.rolling(window=length).std()
+    upper = basis + dev
+    lower = basis - dev
+    bbw = ((upper - lower) / basis.where(basis != 0, np.nan)) * 100
+    lowest_contraction = bbw.rolling(window=contraction_length).min()
+    return lowest_contraction
+
+
+def calculate_balance_of_power(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series) -> pd.Series:
+    """
+    Calculate Balance of Power (BOP) indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+
+    Returns:
+        pd.Series: Series containing BOP values ((close - open) / (high - low)), aligned with input index
+    """
+    return (data_close - data_open) / (data_high -
+                                       data_low).where(data_high != data_low, np.nan)
+
+
+def calculate_bollinger_bands_percent_b(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 20,
+        mult: float = 2.0) -> pd.Series:
+    """
+    Calculate Bollinger Bands %b (BB %b) indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for SMA and standard deviation (default: 20, min: 1)
+        mult (float): Standard deviation multiplier (default: 2.0, min: 0.001, max: 50)
+
+    Returns:
+        pd.Series: Series containing BB %b values ((source - lower) / (upper - lower)), aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+
+    if mult < 0.001 or mult > 50:
+        raise ValueError("Multiplier must be between 0.001 and 50")
+    src = data_close
+    basis = src.rolling(window=length).mean()
+    dev = mult * src.rolling(window=length).std()
+    upper = basis + dev
+    lower = basis - dev
+    bbr = (src - lower) / (upper - lower).where(upper != lower, np.nan)
+
+    return bbr
+
+
+def calculate_alma(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 50,
+        offset: float = 0.85,
+        sigma: float = 6.0) -> pd.Series:
+    """
+    Calculate Arnaud Legoux Moving Average (ALMA) indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for ALMA calculation (default: 50, min: 1)
+        offset (float): Offset for weight distribution (default: 0.85)
+        sigma (float): Standard deviation for Gaussian weights (default: 6.0)
+
+    Returns:
+        pd.Series: Series containing ALMA values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+
+    if sigma <= 0:
+        raise ValueError("Sigma must be positive")
+
+    src = data_close
+    alma = pd.Series(np.nan, index=src.index)
+
+    m = offset * (length - 1)
+    s = length / sigma
+    weights = np.exp(-((np.arange(length) - m) ** 2) / (2 * s ** 2))
+    weights /= weights.sum()
+
+    for i in range(length - 1, len(src)):
+        window = src.iloc[i - length + 1:i + 1]
+        if len(window) == length and not np.any(np.isnan(window)):
+            alma.iloc[i] = np.sum(window * weights)
+
+    return alma
