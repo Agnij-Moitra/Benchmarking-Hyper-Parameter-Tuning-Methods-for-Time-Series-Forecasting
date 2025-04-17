@@ -357,7 +357,7 @@ def calculate_stochastic_rsi_k(
             * 100).rolling(window=smooth_k).mean()
 
 
-def calculate_stochastic_rsi_k(
+def calculate_stochastic_rsi_d(
         data: pd.Series,
         rsi_period: int = 14,
         stoch_period: int = 14,
