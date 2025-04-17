@@ -161,18 +161,16 @@ def calculate_hma(data: pd.Series, n: int) -> pd.Series:
     ### Returns:
         - `pd.Series`: Series containing HMA values
     """
-    intermediate = 2 * data.rolling(window=n // 2).apply(
+    sqrt_n = int(np.sqrt(n))
+    weights = np.arange(1, sqrt_n + 1)
+    return (2 * data.rolling(window=n // 2).apply(
         lambda x: np.dot(x, np.arange(1, n // 2 + 1)) /
         np.sum(np.arange(1, n // 2 + 1)),
         raw=True
     ) - data.rolling(window=n).apply(
         lambda x: np.dot(x, np.arange(1, n + 1)) / np.sum(np.arange(1, n + 1)),
         raw=True
-    )
-
-    sqrt_n = int(np.sqrt(n))
-    weights = np.arange(1, sqrt_n + 1)
-    return intermediate.rolling(window=sqrt_n).apply(
+    )).rolling(window=sqrt_n).apply(
         lambda x: np.dot(x, weights) / weights.sum(),
         raw=True
     )
@@ -381,7 +379,7 @@ def calculate_stochastic_rsi_k(
     rsi = calculate_rsi(data=data, n=rsi_period)
     lowest_rsi = rsi.rolling(window=stoch_period).min()
     highest_rsi = rsi.rolling(window=stoch_period).max()
-    return (((rsi - lowest_rsi) / (highest_rsi - lowest_rsi)) *
+    return (((rsi - lowest_rsi) / (highest_rsi - lowest_rsi)) * \
             100).rolling(window=smooth_k).mean().rolling(window=smooth_d).mean()
 
 
@@ -1040,8 +1038,8 @@ def commodity_channel_index(data_high: pd.Series,
         pd.Series: CCI values
     """
     typical_price = (data_high + data_low + data_close) / 3
-    return (typical_price - typical_price.rolling(window=period).mean()) / (0.015 *
-                                                                            typical_price.rolling(window=period).apply(lambda x: pd.Series(x).mad(), raw=False))
+    return (typical_price - typical_price.rolling(window=period).mean()) / (0.015 * \
+            typical_price.rolling(window=period).apply(lambda x: pd.Series(x).mad(), raw=False))
 
 
 def chande_momentum_oscillator(
@@ -2141,8 +2139,8 @@ def calculate_supertrend_line(
         elif data_close.iloc[i] < lower_band.iloc[i - 1]:
             supertrend.iloc[i] = upper_band.iloc[i]
         else:
-            supertrend.iloc[i] = lower_band.iloc[i] if supertrend.iloc[i - \
-                1] == lower_band.iloc[i - 1] else upper_band.iloc[i]
+            supertrend.iloc[i] = lower_band.iloc[i] if supertrend.iloc[i -
+                                                                       1] == lower_band.iloc[i - 1] else upper_band.iloc[i]
 
     return supertrend
 
@@ -2357,8 +2355,6 @@ def calculate_iv_percentile(
 
 def calculate_ml_rsi(
         data_close: pd.Series,
-        data_high: pd.Series,
-        data_low: pd.Series,
         rsi_length: int = 14,
         use_smoothing: bool = True,
         smoothing_length: int = 3,
@@ -2633,17 +2629,13 @@ def calculate_ml_rsi(
 
 def calculate_ml_rsi_overbought(
         data_close: pd.Series,
-        data_high: pd.Series,
-        data_low: pd.Series,
         rsi_length: int = 14,
         use_smoothing: bool = True,
         smoothing_length: int = 3,
         ma_type: str = "ALMA",
         alma_sigma: int = 4,
         use_knn: bool = True,
-        knn_neighbors: int = 5,
         knn_lookback: int = 100,
-        knn_weight: float = 0.4,
         feature_count: int = 3) -> pd.Series:
     """
     Calculate Machine Learning-enhanced RSI Overbought Threshold for pandas Series of close, high, and low data.
@@ -2846,8 +2838,8 @@ def calculate_ml_rsi_overbought(
                         indices.append(i - j)
                         if i - j + 5 < len(data_close) and not np.isnan(
                                 data_close.iloc[i - j + 5]) and not np.isnan(data_close.iloc[i - j]):
-                            future_return = data_close.iloc[i -
-                                                            j + 5] - data_close.iloc[i - j]
+                            future_return = data_close.iloc[i - \
+                                j + 5] - data_close.iloc[i - j]
                             if future_return > data_close.iloc[i - j] * 0.02:
                                 overbought_candidates.append(
                                     standard_rsi.iloc[i - j])
@@ -2860,17 +2852,13 @@ def calculate_ml_rsi_overbought(
 
 def calculate_ml_rsi_oversold(
         data_close: pd.Series,
-        data_high: pd.Series,
-        data_low: pd.Series,
         rsi_length: int = 14,
         use_smoothing: bool = True,
         smoothing_length: int = 3,
         ma_type: str = "ALMA",
         alma_sigma: int = 4,
         use_knn: bool = True,
-        knn_neighbors: int = 5,
         knn_lookback: int = 100,
-        knn_weight: float = 0.4,
         feature_count: int = 3) -> pd.Series:
     """
     Calculate Machine Learning-enhanced RSI Oversold Threshold for pandas Series of close, high, and low data.
@@ -3073,8 +3061,8 @@ def calculate_ml_rsi_oversold(
                         indices.append(i - j)
                         if i - j + 5 < len(data_close) and not np.isnan(
                                 data_close.iloc[i - j + 5]) and not np.isnan(data_close.iloc[i - j]):
-                            future_return = data_close.iloc[i -
-                                                            j + 5] - data_close.iloc[i - j]
+                            future_return = data_close.iloc[i - \
+                                j + 5] - data_close.iloc[i - j]
                             if future_return < data_close.iloc[i - j] * -0.02:
                                 oversold_candidates.append(
                                     standard_rsi.iloc[i - j])
@@ -3083,3 +3071,1738 @@ def calculate_ml_rsi_oversold(
                 oversold.iloc[i] = np.mean(oversold_candidates)
 
     return oversold
+
+
+def calculate_zigzag(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        deviation: float = 5.0,
+        depth: int = 10) -> pd.Series:
+    """
+    Calculate the ZigZag indicator as a pd.Series for time series prediction, identifying significant price reversals.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        deviation (float): Minimum percentage price change to form a new pivot (default: 5.0)
+        depth (int): Number of bars to confirm a pivot (minimum 2, default: 10)
+
+    Returns:
+        pd.Series: Series with pivot prices at reversal points, 0 elsewhere, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if deviation <= 0 or deviation > 100:
+        raise ValueError("Deviation must be between 0.00001 and 100")
+
+    if depth < 2:
+        raise ValueError("Depth must be at least 2")
+
+    # Initialize output series with zeros
+    zigzag = pd.Series(0.0, index=data_close.index)
+    deviation = deviation / 100  # Convert percentage to decimal
+    last_pivot_price = data_close.iloc[0]
+    last_pivot_index = data_close.index[0]
+    last_pivot_type = None
+    direction = 0  # 0: undefined, 1: up, -1: down
+
+    def is_pivot_high(index, depth):
+        """Check if the bar at index is a pivot high."""
+        idx = data_high.index.get_loc(index)
+        if idx < depth or idx >= len(data_high) - depth:
+            return False
+        center = data_high.iloc[idx]
+        for i in range(idx - depth, idx + depth + 1):
+            if i != idx and data_high.iloc[i] > center:
+                return False
+        return True
+
+    def is_pivot_low(index, depth):
+        """Check if the bar at index is a pivot low."""
+        idx = data_low.index.get_loc(index)
+        if idx < depth or idx >= len(data_low) - depth:
+            return False
+        center = data_low.iloc[idx]
+        for i in range(idx - depth, idx + depth + 1):
+            if i != idx and data_low.iloc[i] < center:
+                return False
+        return True
+
+    # Iterate through the data to find pivots
+    for i in range(depth, len(data_close)):
+        current_index = data_close.index[i]
+        current_high = data_high.iloc[i]
+        current_low = data_low.iloc[i]
+
+        # Check for pivot high
+        if is_pivot_high(current_index, depth // 2):
+            price_change = (
+                current_high /
+                last_pivot_price -
+                1) if last_pivot_price > 0 else 0
+            if (direction <= 0 and price_change >= deviation) or (
+                    direction == 1 and current_high > last_pivot_price):
+                if last_pivot_type != 'high' or price_change >= deviation:
+                    if last_pivot_type == 'low':
+                        zigzag.loc[last_pivot_index] = last_pivot_price
+                    zigzag.loc[current_index] = current_high
+                    last_pivot_price = current_high
+                    last_pivot_index = current_index
+                    last_pivot_type = 'high'
+                    direction = 1
+
+        # Check for pivot low
+        if is_pivot_low(current_index, depth // 2):
+            price_change = (
+                last_pivot_price /
+                current_low -
+                1) if current_low > 0 else 0
+            if (direction >= 0 and price_change >= deviation) or (
+                    direction == -1 and current_low < last_pivot_price):
+                if last_pivot_type != 'low' or price_change >= deviation:
+                    if last_pivot_type == 'high':
+                        zigzag.loc[last_pivot_index] = last_pivot_price
+                    zigzag.loc[current_index] = current_low
+                    last_pivot_price = current_low
+                    last_pivot_index = current_index
+                    last_pivot_type = 'low'
+                    direction = -1
+
+    # Clean up consecutive pivots of the same type
+    temp_zigzag = zigzag[zigzag != 0]
+    if len(temp_zigzag) > 1:
+        cleaned_zigzag = pd.Series(0.0, index=data_close.index)
+        i = 0
+        while i < len(temp_zigzag):
+            current_index = temp_zigzag.index[i]
+            current_price = temp_zigzag.iloc[i]
+            cleaned_zigzag.loc[current_index] = current_price
+            j = i + 1
+            current_type = 'high' if (
+                i == 0 or temp_zigzag.iloc[i] > temp_zigzag.iloc[i - 1]) else 'low'
+            while j < len(temp_zigzag) and ((current_type == 'high' and temp_zigzag.iloc[j] > temp_zigzag.iloc[j - 1]) or (
+                    current_type == 'low' and temp_zigzag.iloc[j] < temp_zigzag.iloc[j - 1])):
+                if (current_type == 'high' and temp_zigzag.iloc[j] > current_price) or (
+                        current_type == 'low' and temp_zigzag.iloc[j] < current_price):
+                    cleaned_zigzag.loc[current_index] = 0.0
+                    current_index = temp_zigzag.index[j]
+                    current_price = temp_zigzag.iloc[j]
+                    cleaned_zigzag.loc[current_index] = current_price
+                j += 1
+            i = j
+        zigzag = cleaned_zigzag
+
+    return zigzag
+
+
+def calculate_cci_turbo(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        cci_turbo_length: int = 6) -> pd.Series:
+    """
+    Calculate Woodies CCI Turbo indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        cci_turbo_length (int): Length for Turbo CCI (default: 6, min: 3, max: 14)
+
+    Returns:
+        pd.Series: Series containing Turbo CCI values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if not (3 <= cci_turbo_length <= 14):
+        raise ValueError("cci_turbo_length must be between 3 and 14")
+
+    typical_price = (data_high + data_low + data_close) / 3
+    sma_tp = typical_price.rolling(window=cci_turbo_length).mean()
+    mean_dev = typical_price.rolling(
+        window=cci_turbo_length).apply(
+        lambda x: np.mean(
+            np.abs(
+                x -
+                x.mean())),
+        raw=True)
+    cci_turbo = (typical_price - sma_tp) / (0.015 * mean_dev)
+
+    return cci_turbo
+
+
+def calculate_cci_14(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        cci_14_length: int = 14) -> pd.Series:
+    """
+    Calculate Woodies CCI 14-period indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        cci_14_length (int): Length for 14-period CCI (default: 14, min: 7, max: 20)
+
+    Returns:
+        pd.Series: Series containing 14-period CCI values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if not (7 <= cci_14_length <= 20):
+        raise ValueError("cci_14_length must be between 7 and 20")
+    typical_price = (data_high + data_low + data_close) / 3
+    sma_tp = typical_price.rolling(window=cci_14_length).mean()
+    mean_dev = typical_price.rolling(
+        window=cci_14_length).apply(
+        lambda x: np.mean(
+            np.abs(
+                x -
+                x.mean())),
+        raw=True)
+    cci_14 = (typical_price - sma_tp) / (0.015 * mean_dev)
+
+    return cci_14
+
+
+def calculate_williams_percent_r(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 14) -> pd.Series:
+    """
+    Calculate Williams Percent Range (%R) indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for %R calculation (default: 14)
+
+    Returns:
+        pd.Series: Series containing Williams %R values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+    max_high = data_high.rolling(window=length).max()
+    min_low = data_low.rolling(window=length).min()
+    percent_r = 100 * (data_close - max_high) / (max_high -
+                                                 min_low).where(max_high != min_low, np.nan)
+    return percent_r
+
+
+def calculate_williams_percent_r_signal(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 14) -> pd.Series:
+    """
+    Calculate Williams Percent Range (%R) signal as a pd.Series, indicating overbought, oversold, or neutral conditions.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for %R calculation (default: 14)
+
+    Returns:
+        pd.Series: Series with signal values (+1 for %R > -20, -1 for %R < -80, 0 for -80 <= %R <= -20), aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+    max_high = data_high.rolling(window=length).max()
+    min_low = data_low.rolling(window=length).min()
+    percent_r = 100 * (data_close - max_high) / (max_high -
+                                                 min_low).where(max_high != min_low, np.nan)
+    signal = pd.Series(0, index=data_close.index, dtype=int)
+    signal[percent_r > -20] = 1
+    signal[percent_r < -80] = -1
+    return signal
+
+
+def calculate_alligator_jaw(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        jaw_length: int = 13,
+        jaw_offset: int = 8) -> pd.Series:
+    """
+    Calculate Williams Alligator Jaw line as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        jaw_length (int): Length for Jaw SMMA (default: 13, min: 1)
+        jaw_offset (int): Offset for Jaw line (default: 8)
+
+    Returns:
+        pd.Series: Series containing Jaw SMMA values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if jaw_length < 1:
+        raise ValueError("Jaw length must be at least 1")
+
+    def smma(src, length):
+        """Calculate Smoothed Moving Average (SMMA)."""
+        smma = pd.Series(np.nan, index=src.index)
+        sma_initial = src.rolling(window=length).mean()
+        smma.iloc[length - 1] = sma_initial.iloc[length - 1]
+
+        for i in range(length, len(src)):
+            if not np.isnan(smma.iloc[i - 1]):
+                smma.iloc[i] = (smma.iloc[i - 1] *
+                                (length - 1) + src.iloc[i]) / length
+
+        return smma
+    hl2 = (data_high + data_low) / 2
+    jaw = smma(hl2, jaw_length).shift(jaw_offset)
+    return jaw
+
+
+def calculate_alligator_teeth(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        teeth_length: int = 8,
+        teeth_offset: int = 5) -> pd.Series:
+    """
+    Calculate Williams Alligator Teeth line as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        teeth_length (int): Length for Teeth SMMA (default: 8, min: 1)
+        teeth_offset (int): Offset for Teeth line (default: 5)
+
+    Returns:
+        pd.Series: Series containing Teeth SMMA values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if teeth_length < 1:
+        raise ValueError("Teeth length must be at least 1")
+
+    def smma(src, length):
+        """Calculate Smoothed Moving Average (SMMA)."""
+        smma = pd.Series(np.nan, index=src.index)
+        sma_initial = src.rolling(window=length).mean()
+        smma.iloc[length - 1] = sma_initial.iloc[length - 1]
+
+        for i in range(length, len(src)):
+            if not np.isnan(smma.iloc[i - 1]):
+                smma.iloc[i] = (smma.iloc[i - 1] *
+                                (length - 1) + src.iloc[i]) / length
+
+        return smma
+    hl2 = (data_high + data_low) / 2
+    teeth = smma(hl2, teeth_length).shift(teeth_offset)
+    return teeth
+
+
+def calculate_alligator_lips(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        lips_length: int = 5,
+        lips_offset: int = 3) -> pd.Series:
+    """
+    Calculate Williams Alligator Lips line as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        lips_length (int): Length for Lips SMMA (default: 5, min: 1)
+        lips_offset (int): Offset for Lips line (default: 3)
+
+    Returns:
+        pd.Series: Series containing Lips SMMA values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if lips_length < 1:
+        raise ValueError("Lips length must be at least 1")
+
+    def smma(src, length):
+        """Calculate Smoothed Moving Average (SMMA)."""
+        smma = pd.Series(np.nan, index=src.index)
+        sma_initial = src.rolling(window=length).mean()
+        smma.iloc[length - 1] = sma_initial.iloc[length - 1]
+
+        for i in range(length, len(src)):
+            if not np.isnan(smma.iloc[i - 1]):
+                smma.iloc[i] = (smma.iloc[i - 1] *
+                                (length - 1) + src.iloc[i]) / length
+
+        return smma
+    hl2 = (data_high + data_low) / 2
+    lips = smma(hl2, lips_length).shift(lips_offset)
+    return lips
+
+
+def calculate_vortex_positive(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        period: int = 14) -> pd.Series:
+    """
+    Calculate Vortex Indicator Positive (VI+) line as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        period (int): Lookback period for VI+ calculation (default: 14, min: 2)
+
+    Returns:
+        pd.Series: Series containing VI+ values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if period < 2:
+        raise ValueError("Period must be at least 2")
+    vmp = np.abs(data_high - data_low.shift(1))
+    tr1 = data_high - data_low
+    tr2 = np.abs(data_high - data_close.shift(1))
+    tr3 = np.abs(data_low - data_close.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    vmp_sum = vmp.rolling(window=period).sum()
+    str_sum = tr.rolling(window=period).sum()
+    vip = vmp_sum / str_sum.where(str_sum != 0, np.nan)
+    return vip
+
+
+def calculate_vortex_negative(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        period: int = 14) -> pd.Series:
+    """
+    Calculate Vortex Indicator Negative (VI-) line as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        period (int): Lookback period for VI- calculation (default: 14, min: 2)
+
+    Returns:
+        pd.Series: Series containing VI- values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if period < 2:
+        raise ValueError("Period must be at least 2")
+    vmm = np.abs(data_low - data_high.shift(1))
+    tr1 = data_high - data_low
+    tr2 = np.abs(data_high - data_close.shift(1))
+    tr3 = np.abs(data_low - data_close.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    vmm_sum = vmm.rolling(window=period).sum()
+    str_sum = tr.rolling(window=period).sum()
+    vim = vmm_sum / str_sum.where(str_sum != 0, np.nan)
+    return vim
+
+
+def calculate_volatility_stop_vstop(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 20,
+        factor: float = 2.0) -> pd.Series:
+    """
+    Calculate Volatility Stop (vstop) line as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for ATR calculation (default: 20, min: 2)
+        factor (float): Multiplier for ATR (default: 2.0, min: 0.25)
+
+    Returns:
+        pd.Series: Series containing Volatility Stop prices, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if length < 2:
+        raise ValueError("Length must be at least 2")
+    if factor < 0.25:
+        raise ValueError("Factor must be at least 0.25")
+    tr1 = data_high - data_low
+    tr2 = np.abs(data_high - data_close.shift(1))
+    tr3 = np.abs(data_low - data_close.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=length).mean()
+    src = data_close
+    max_price = pd.Series(np.nan, index=src.index)
+    min_price = pd.Series(np.nan, index=src.index)
+    uptrend = pd.Series(False, index=src.index)
+    vstop = pd.Series(np.nan, index=src.index)
+    max_price.iloc[0] = src.iloc[0]
+    min_price.iloc[0] = src.iloc[0]
+    uptrend.iloc[0] = True
+    vstop.iloc[0] = src.iloc[0]
+    for i in range(1, len(src)):
+        atr_m = atr.iloc[i] * \
+            factor if not np.isnan(atr.iloc[i]) else tr.iloc[i]
+        max_price.iloc[i] = max(max_price.iloc[i -
+                                               1], src.iloc[i]) if not np.isnan(max_price.iloc[i -
+                                                                                               1]) else src.iloc[i]
+        min_price.iloc[i] = min(min_price.iloc[i -
+                                               1], src.iloc[i]) if not np.isnan(min_price.iloc[i -
+                                                                                               1]) else src.iloc[i]
+        if uptrend.iloc[i - 1]:
+            vstop.iloc[i] = max(vstop.iloc[i -
+                                           1], max_price.iloc[i] -
+                                atr_m) if not np.isnan(vstop.iloc[i -
+                                                                  1]) else src.iloc[i]
+        else:
+            vstop.iloc[i] = min(vstop.iloc[i -
+                                           1], min_price.iloc[i] +
+                                atr_m) if not np.isnan(vstop.iloc[i -
+                                                                  1]) else src.iloc[i]
+        uptrend.iloc[i] = src.iloc[i] - vstop.iloc[i] >= 0
+        if uptrend.iloc[i] != uptrend.iloc[i - 1]:
+            max_price.iloc[i] = src.iloc[i]
+            min_price.iloc[i] = src.iloc[i]
+            vstop.iloc[i] = max_price.iloc[i] - \
+                atr_m if uptrend.iloc[i] else min_price.iloc[i] + atr_m
+    return vstop
+
+
+def calculate_volatility_stop_uptrend(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 20,
+        factor: float = 2.0) -> pd.Series:
+    """
+    Calculate Volatility Stop uptrend indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for ATR calculation (default: 20, min: 2)
+        factor (float): Multiplier for ATR (default: 2.0, min: 0.25)
+
+    Returns:
+        pd.Series: Series containing boolean uptrend values (True for uptrend, False for downtrend), aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if length < 2:
+        raise ValueError("Length must be at least 2")
+    if factor < 0.25:
+        raise ValueError("Factor must be at least 0.25")
+    tr1 = data_high - data_low
+    tr2 = np.abs(data_high - data_close.shift(1))
+    tr3 = np.abs(data_low - data_close.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=length).mean()
+    src = data_close
+    max_price = pd.Series(np.nan, index=src.index)
+    min_price = pd.Series(np.nan, index=src.index)
+    uptrend = pd.Series(False, index=src.index)
+    vstop = pd.Series(np.nan, index=src.index)
+    max_price.iloc[0] = src.iloc[0]
+    min_price.iloc[0] = src.iloc[0]
+    uptrend.iloc[0] = True
+    vstop.iloc[0] = src.iloc[0]
+    for i in range(1, len(src)):
+        atr_m = atr.iloc[i] * \
+            factor if not np.isnan(atr.iloc[i]) else tr.iloc[i]
+        max_price.iloc[i] = max(max_price.iloc[i -
+                                               1], src.iloc[i]) if not np.isnan(max_price.iloc[i -
+                                                                                               1]) else src.iloc[i]
+        min_price.iloc[i] = min(min_price.iloc[i -
+                                               1], src.iloc[i]) if not np.isnan(min_price.iloc[i -
+                                                                                               1]) else src.iloc[i]
+        if uptrend.iloc[i - 1]:
+            vstop.iloc[i] = max(vstop.iloc[i -
+                                           1], max_price.iloc[i] -
+                                atr_m) if not np.isnan(vstop.iloc[i -
+                                                                  1]) else src.iloc[i]
+        else:
+            vstop.iloc[i] = min(vstop.iloc[i -
+                                           1], min_price.iloc[i] +
+                                atr_m) if not np.isnan(vstop.iloc[i -
+                                                                  1]) else src.iloc[i]
+        uptrend.iloc[i] = src.iloc[i] - vstop.iloc[i] >= 0
+        if uptrend.iloc[i] != uptrend.iloc[i - 1]:
+            max_price.iloc[i] = src.iloc[i]
+            min_price.iloc[i] = src.iloc[i]
+            vstop.iloc[i] = max_price.iloc[i] - \
+                atr_m if uptrend.iloc[i] else min_price.iloc[i] + atr_m
+    return uptrend
+
+
+def calculate_smi_ergodic_oscillator(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        longlen: int = 20,
+        shortlen: int = 5,
+        siglen: int = 5) -> pd.Series:
+    """
+    Calculate SMI Ergodic Oscillator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        longlen (int): Long length for TSI calculation (default: 20, min: 1)
+        shortlen (int): Short length for TSI calculation (default: 5, min: 1)
+        siglen (int): Signal line EMA length (default: 5, min: 1)
+
+    Returns:
+        pd.Series: Series containing SMI Ergodic Oscillator values (TSI - Signal), aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if longlen < 1 or shortlen < 1 or siglen < 1:
+        raise ValueError("Length parameters must be at least 1")
+
+    def calculate_tsi(src, shortlen, longlen):
+        """Calculate True Strength Index (TSI)."""
+        delta = src.diff()
+        abs_delta = delta.abs()
+        ema_short = delta.ewm(span=shortlen, adjust=False).mean()
+        ema_long = ema_short.ewm(span=longlen, adjust=False).mean()
+        abs_ema_short = abs_delta.ewm(span=shortlen, adjust=False).mean()
+        abs_ema_long = abs_ema_short.ewm(span=longlen, adjust=False).mean()
+        tsi = 100 * ema_long / abs_ema_long.where(abs_ema_long != 0, np.nan)
+        return tsi
+    erg = calculate_tsi(data_close, shortlen, longlen)
+    sig = erg.ewm(span=siglen, adjust=False).mean()
+    osc = erg - sig
+    return osc
+
+
+def calculate_smi(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        longlen: int = 20,
+        shortlen: int = 5) -> pd.Series:
+    """
+    Calculate SMI Ergodic Indicator SMI (TSI) as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        longlen (int): Long length for TSI calculation (default: 20, min: 1)
+        shortlen (int): Short length for TSI calculation (default: 5, min: 1)
+
+    Returns:
+        pd.Series: Series containing SMI (TSI) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if longlen < 1 or shortlen < 1:
+        raise ValueError("Length parameters must be at least 1")
+
+    def calculate_tsi(src, shortlen, longlen):
+        """Calculate True Strength Index (TSI)."""
+        delta = src.diff()
+        abs_delta = delta.abs()
+        ema_short = delta.ewm(span=shortlen, adjust=False).mean()
+        ema_long = ema_short.ewm(span=longlen, adjust=False).mean()
+        abs_ema_short = abs_delta.ewm(span=shortlen, adjust=False).mean()
+        abs_ema_long = abs_ema_short.ewm(span=longlen, adjust=False).mean()
+        tsi = 100 * ema_long / abs_ema_long.where(abs_ema_long != 0, np.nan)
+        return tsi
+    smi = calculate_tsi(data_close, shortlen, longlen)
+    return smi
+
+
+def calculate_smi_signal(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        longlen: int = 20,
+        shortlen: int = 5,
+        siglen: int = 5) -> pd.Series:
+    """
+    Calculate SMI Ergodic Indicator Signal line (EMA of TSI) as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        longlen (int): Long length for TSI calculation (default: 20, min: 1)
+        shortlen (int): Short length for TSI calculation (default: 5, min: 1)
+        siglen (int): Signal line EMA length (default: 5, min: 1)
+
+    Returns:
+        pd.Series: Series containing Signal (EMA of TSI) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if longlen < 1 or shortlen < 1 or siglen < 1:
+        raise ValueError("Length parameters must be at least 1")
+
+    def calculate_tsi(src, shortlen, longlen):
+        """Calculate True Strength Index (TSI)."""
+        delta = src.diff()
+        abs_delta = delta.abs()
+        ema_short = delta.ewm(span=shortlen, adjust=False).mean()
+        ema_long = ema_short.ewm(span=longlen, adjust=False).mean()
+        abs_ema_short = abs_delta.ewm(span=shortlen, adjust=False).mean()
+        abs_ema_long = abs_ema_short.ewm(span=longlen, adjust=False).mean()
+        tsi = 100 * ema_long / abs_ema_long.where(abs_ema_long != 0, np.nan)
+        return tsi
+    smi = calculate_tsi(data_close, shortlen, longlen)
+    signal = smi.ewm(span=siglen, adjust=False).mean()
+    return signal
+
+
+def calculate_rvi(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 10,
+        offset: int = 0) -> pd.Series:
+    """
+    Calculate Relative Volatility Index (RVI) as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for standard deviation calculation (default: 10, min: 1)
+        offset (int): Offset for RVI values (default: 0, min: -500, max: 500)
+
+    Returns:
+        pd.Series: Series containing RVI values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+
+    if offset < -500 or offset > 500:
+        raise ValueError("Offset must be between -500 and 500")
+    stddev = data_close.rolling(window=length).std()
+    change = data_close.diff()
+    len_ema = 14
+    upper = pd.Series(0.0, index=data_close.index)
+    lower = pd.Series(0.0, index=data_close.index)
+    upper[change <= 0] = stddev[change <= 0]
+    lower[change > 0] = stddev[change > 0]
+    upper_ema = upper.ewm(span=len_ema, adjust=False).mean()
+    lower_ema = lower.ewm(span=len_ema, adjust=False).mean()
+    rvi = upper_ema / (upper_ema + lower_ema).where(upper_ema +
+                                                    lower_ema != 0, np.nan) * 100
+    rvi = rvi.shift(offset)
+    return rvi
+
+
+def calculate_short_rci(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 10) -> pd.Series:
+    """
+    Calculate Short RCI line of the RCI Ribbon indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Length for Short RCI (default: 10, min: 1)
+
+    Returns:
+        pd.Series: Series containing Short RCI values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+
+    def calculate_rci(src, length):
+        """Calculate Rank Correlation Index (RCI) for a given source and length."""
+        rci = pd.Series(np.nan, index=src.index)
+        for i in range(length - 1, len(src)):
+            window = src.iloc[i - length + 1:i + 1]
+            price_ranks = window.rank(ascending=True)
+            time_ranks = pd.Series(range(1, length + 1), index=window.index)
+            d_squared = (price_ranks - time_ranks) ** 2
+            sum_d_squared = d_squared.sum()
+            n = length
+            max_d_squared = (n * (n**2 - 1)) / 6
+            rci.iloc[i] = 100 * (1 - (sum_d_squared / max_d_squared)
+                                 ) if max_d_squared != 0 else np.nan
+        return rci
+    return calculate_rci(data_close, length)
+
+
+def calculate_middle_rci(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 30) -> pd.Series:
+    """
+    Calculate Middle RCI line of the RCI Ribbon indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Length for Middle RCI (default: 30, min: 1)
+
+    Returns:
+        pd.Series: Series containing Middle RCI values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+
+    def calculate_rci(src, length):
+        """Calculate Rank Correlation Index (RCI) for a given source and length."""
+        rci = pd.Series(np.nan, index=src.index)
+        for i in range(length - 1, len(src)):
+            window = src.iloc[i - length + 1:i + 1]
+            price_ranks = window.rank(ascending=True)
+            time_ranks = pd.Series(range(1, length + 1), index=window.index)
+            d_squared = (price_ranks - time_ranks) ** 2
+            sum_d_squared = d_squared.sum()
+            n = length
+            max_d_squared = (n * (n**2 - 1)) / 6
+            rci.iloc[i] = 100 * (1 - (sum_d_squared / max_d_squared)
+                                 ) if max_d_squared != 0 else np.nan
+        return rci
+    return calculate_rci(data_close, length)
+
+
+def calculate_long_rci(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 50) -> pd.Series:
+    """
+    Calculate Long RCI line of the RCI Ribbon indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Length for Long RCI (default: 50, min: 1)
+
+    Returns:
+        pd.Series: Series containing Long RCI values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+
+    def calculate_rci(src, length):
+        """Calculate Rank Correlation Index (RCI) for a given source and length."""
+        rci = pd.Series(np.nan, index=src.index)
+        for i in range(length - 1, len(src)):
+            window = src.iloc[i - length + 1:i + 1]
+            price_ranks = window.rank(ascending=True)
+            time_ranks = pd.Series(range(1, length + 1), index=window.index)
+            d_squared = (price_ranks - time_ranks) ** 2
+            sum_d_squared = d_squared.sum()
+            n = length
+            max_d_squared = (n * (n**2 - 1)) / 6
+            rci.iloc[i] = 100 * (1 - (sum_d_squared / max_d_squared)
+                                 ) if max_d_squared != 0 else np.nan
+        return rci
+    return calculate_rci(data_close, length)
+
+
+def calculate_momentum(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        len: int = 10) -> pd.Series:
+    """
+    Calculate Momentum indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        len (int): Lookback period for Momentum calculation (default: 10, min: 1)
+
+    Returns:
+        pd.Series: Series containing Momentum values (current source - source[len]), aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if len < 1:
+        raise ValueError("Length must be at least 1")
+    src = data_close
+    mom = src - src.shift(len)
+    return mom
+
+
+def calculate_median(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 3) -> pd.Series:
+    """
+    Calculate Median line of the Median indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for median calculation (default: 3, min: 1)
+
+    Returns:
+        pd.Series: Series containing Median (50th percentile) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+    source = (data_high + data_low) / 2
+    median = source.rolling(window=length).quantile(0.5)
+
+    return median
+
+
+def calculate_upper_band(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 3,
+        atr_length: int = 14,
+        atr_mult: float = 2.0) -> pd.Series:
+    """
+    Calculate Upper Band of the Median indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for median calculation (default: 3, min: 1)
+        atr_length (int): Lookback period for ATR calculation (default: 14, min: 1)
+        atr_mult (float): Multiplier for ATR (default: 2.0, min: 0)
+
+    Returns:
+        pd.Series: Series containing Upper Band (Median + ATR * multiplier) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1 or atr_length < 1:
+        raise ValueError("Length and ATR length must be at least 1")
+
+    if atr_mult < 0:
+        raise ValueError("ATR multiplier must be non-negative")
+    source = (data_high + data_low) / 2
+    median = source.rolling(window=length).quantile(0.5)
+    tr1 = data_high - data_low
+    tr2 = np.abs(data_high - data_close.shift(1))
+    tr3 = np.abs(data_low - data_close.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=atr_length).mean()
+    upper_band = median + (atr * atr_mult)
+
+    return upper_band
+
+
+def calculate_lower_band(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 3,
+        atr_length: int = 14,
+        atr_mult: float = 2.0) -> pd.Series:
+    """
+    Calculate Lower Band of the Median indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for median calculation (default: 3, min: 1)
+        atr_length (int): Lookback period for ATR calculation (default: 14, min: 1)
+        atr_mult (float): Multiplier for ATR (default: 2.0, min: 0)
+
+    Returns:
+        pd.Series: Series containing Lower Band (Median - ATR * multiplier) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1 or atr_length < 1:
+        raise ValueError("Length and ATR length must be at least 1")
+
+    if atr_mult < 0:
+        raise ValueError("ATR multiplier must be non-negative")
+    source = (data_high + data_low) / 2
+    median = source.rolling(window=length).quantile(0.5)
+    tr1 = data_high - data_low
+    tr2 = np.abs(data_high - data_close.shift(1))
+    tr3 = np.abs(data_low - data_close.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=atr_length).mean()
+    lower_band = median - (atr * atr_mult)
+
+    return lower_band
+
+
+def calculate_median_ema(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 3) -> pd.Series:
+    """
+    Calculate Median EMA of the Median indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for median and EMA calculation (default: 3, min: 1)
+
+    Returns:
+        pd.Series: Series containing EMA of Median values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+    source = (data_high + data_low) / 2
+    median = source.rolling(window=length).quantile(0.5)
+    median_ema = median.ewm(span=length, adjust=False).mean()
+
+    return median_ema
+
+
+def calculate_mcginley_dynamic(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 14) -> pd.Series:
+    """
+    Calculate McGinley Dynamic indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for initial EMA and adjustment factor (default: 14, min: 1)
+
+    Returns:
+        pd.Series: Series containing McGinley Dynamic values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+    src = data_close
+    mg = pd.Series(np.nan, index=src.index)
+    ema_initial = src.rolling(window=length).mean()
+    mg.iloc[length - 1] = ema_initial.iloc[length - 1]
+    for i in range(length, len(src)):
+        if not np.isnan(mg.iloc[i - 1]) and mg.iloc[i - 1] != 0:
+            ratio = src.iloc[i] / mg.iloc[i - 1]
+            adjustment = length * (ratio ** 4)
+            mg.iloc[i] = mg.iloc[i - 1] + (src.iloc[i] - mg.iloc[i - 1]) / \
+                adjustment if adjustment != 0 else mg.iloc[i - 1]
+    return mg
+
+
+def calculate_lsma(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 25,
+        offset: int = 0) -> pd.Series:
+    """
+    Calculate Least Squares Moving Average (LSMA) as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for linear regression (default: 25, min: 1)
+        offset (int): Offset for LSMA values (default: 0)
+
+    Returns:
+        pd.Series: Series containing LSMA values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+
+    def linreg(src, length):
+        """Calculate linear regression value at the most recent point."""
+        lsma = pd.Series(np.nan, index=src.index)
+        x = np.arange(length)
+
+        for i in range(length - 1, len(src)):
+            y = src.iloc[i - length + 1:i + 1].values
+            if len(y) == length and not np.any(np.isnan(y)):
+                coeffs = np.polyfit(x, y, 1)
+                lsma.iloc[i] = np.polyval(coeffs, length - 1)
+        return lsma
+
+    src = data_close
+    lsma = linreg(src, length)
+
+    lsma = lsma.shift(offset)
+
+    return lsma
+
+
+def calculate_fisher(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        len: int = 9) -> pd.Series:
+    """
+    Calculate Fisher Transform line as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        len (int): Lookback period for highest/lowest calculation (default: 9, min: 1)
+
+    Returns:
+        pd.Series: Series containing Fisher Transform values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if len < 1:
+        raise ValueError("Length must be at least 1")
+
+    hl2 = (data_high + data_low) / 2
+
+    value = pd.Series(0.0, index=hl2.index)
+    fish1 = pd.Series(0.0, index=hl2.index)
+
+    high_ = hl2.rolling(window=len).max()
+    low_ = hl2.rolling(window=len).min()
+    for i in range(1, len(hl2)):
+        if high_.iloc[i] != low_.iloc[i]:
+            raw_value = 0.66 * ((hl2.iloc[i] - low_.iloc[i]) / (
+                high_.iloc[i] - low_.iloc[i]) - 0.5) + 0.67 * value.iloc[i - 1]
+            value.iloc[i] = min(max(raw_value, -0.999), 0.999)
+        else:
+            value.iloc[i] = value.iloc[i - 1]
+
+        if abs(value.iloc[i]) < 1:
+            fish1.iloc[i] = 0.5 * np.log((1 + value.iloc[i]) /
+                                         (1 - value.iloc[i])) + 0.5 * fish1.iloc[i - 1]
+        else:
+            fish1.iloc[i] = fish1.iloc[i - 1]
+
+    return fish1
+
+
+def calculate_trigger(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        len: int = 9) -> pd.Series:
+    """
+    Calculate Trigger line (lagged Fisher Transform) as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        len (int): Lookback period for highest/lowest calculation (default: 9, min: 1)
+
+    Returns:
+        pd.Series: Series containing Trigger (lagged Fisher Transform) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if len < 1:
+        raise ValueError("Length must be at least 1")
+
+    hl2 = (data_high + data_low) / 2
+
+    value = pd.Series(0.0, index=hl2.index)
+    fish1 = pd.Series(0.0, index=hl2.index)
+
+    high_ = hl2.rolling(window=len).max()
+    low_ = hl2.rolling(window=len).min()
+    for i in range(1, len(hl2)):
+        if high_.iloc[i] != low_.iloc[i]:
+            raw_value = 0.66 * ((hl2.iloc[i] - low_.iloc[i]) / (
+                high_.iloc[i] - low_.iloc[i]) - 0.5) + 0.67 * value.iloc[i - 1]
+            value.iloc[i] = min(max(raw_value, -0.999), 0.999)
+        else:
+            value.iloc[i] = value.iloc[i - 1]
+        if abs(value.iloc[i]) < 1:
+            fish1.iloc[i] = 0.5 * np.log((1 + value.iloc[i]) /
+                                         (1 - value.iloc[i])) + 0.5 * fish1.iloc[i - 1]
+        else:
+            fish1.iloc[i] = fish1.iloc[i - 1]
+    fish2 = fish1.shift(1)
+
+    return fish2
+
+
+def calculate_envelope_basis(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        len: int = 20,
+        exponential: bool = False) -> pd.Series:
+    """
+    Calculate Basis line of the Envelope indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        len (int): Lookback period for Basis calculation (default: 20, min: 1)
+        exponential (bool): Use EMA instead of SMA for Basis (default: False)
+
+    Returns:
+        pd.Series: Series containing Basis (SMA or EMA) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if len < 1:
+        raise ValueError("Length must be at least 1")
+
+    src = data_close
+    if exponential:
+        basis = src.ewm(span=len, adjust=False).mean()
+    else:
+        basis = src.rolling(window=len).mean()
+
+    return basis
+
+
+def calculate_envelope_upper(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        len: int = 20,
+        percent: float = 10.0,
+        exponential: bool = False) -> pd.Series:
+    """
+    Calculate Upper Band of the Envelope indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        len (int): Lookback period for Basis calculation (default: 20, min: 1)
+        percent (float): Percentage deviation for Upper Band (default: 10.0)
+        exponential (bool): Use EMA instead of SMA for Basis (default: False)
+
+    Returns:
+        pd.Series: Series containing Upper Band (Basis * (1 + percent/100)) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if len < 1:
+        raise ValueError("Length must be at least 1")
+
+    if percent < 0:
+        raise ValueError("Percent must be non-negative")
+
+    src = data_close
+    if exponential:
+        basis = src.ewm(span=len, adjust=False).mean()
+    else:
+        basis = src.rolling(window=len).mean()
+    k = percent / 100.0
+    upper = basis * (1 + k)
+
+    return upper
+
+
+def calculate_envelope_lower(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        len: int = 20,
+        percent: float = 10.0,
+        exponential: bool = False) -> pd.Series:
+    """
+    Calculate Lower Band of the Envelope indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        len (int): Lookback period for Basis calculation (default: 20, min: 1)
+        percent (float): Percentage deviation for Lower Band (default: 10.0)
+        exponential (bool): Use EMA instead of SMA for Basis (default: False)
+
+    Returns:
+        pd.Series: Series containing Lower Band (Basis * (1 - percent/100)) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if len < 1:
+        raise ValueError("Length must be at least 1")
+
+    if percent < 0:
+        raise ValueError("Percent must be non-negative")
+    src = data_close
+    if exponential:
+        basis = src.ewm(span=len, adjust=False).mean()
+    else:
+        basis = src.rolling(window=len).mean()
+    k = percent / 100.0
+    lower = basis * (1 - k)
+
+    return lower
+
+
+def calculate_donchian_upper(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 20,
+        offset: int = 0) -> pd.Series:
+    """
+    Calculate Upper Band of the Donchian Channels indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for highest price calculation (default: 20, min: 1)
+        offset (int): Offset for Upper Band values (default: 0)
+
+    Returns:
+        pd.Series: Series containing Upper Band (highest price) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+    upper = data_high.rolling(window=length).max()
+    upper = upper.shift(offset)
+
+    return upper
+
+
+def calculate_donchian_lower(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 20,
+        offset: int = 0) -> pd.Series:
+    """
+    Calculate Lower Band of the Donchian Channels indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for lowest price calculation (default: 20, min: 1)
+        offset (int): Offset for Lower Band values (default: 0)
+
+    Returns:
+        pd.Series: Series containing Lower Band (lowest price) values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+    lower = data_low.rolling(window=length).min()
+    lower = lower.shift(offset)
+
+    return lower
+
+
+def calculate_coppock_curve(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        wma_length: int = 10,
+        long_roc_length: int = 14,
+        short_roc_length: int = 11) -> pd.Series:
+    """
+    Calculate Coppock Curve indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        wma_length (int): Length for Weighted Moving Average (default: 10, min: 1)
+        long_roc_length (int): Long period for Rate of Change (default: 14, min: 1)
+        short_roc_length (int): Short period for Rate of Change (default: 11, min: 1)
+
+    Returns:
+        pd.Series: Series containing Coppock Curve values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if wma_length < 1 or long_roc_length < 1 or short_roc_length < 1:
+        raise ValueError("Length parameters must be at least 1")
+    src = data_close
+    long_roc = src.pct_change(periods=long_roc_length) * 100
+    short_roc = src.pct_change(periods=short_roc_length) * 100
+    roc_sum = long_roc + short_roc
+    weights = np.arange(1, wma_length + 1)
+    return roc_sum.rolling(
+        window=wma_length).apply(
+        lambda x: np.sum(
+            x *
+            weights) /
+        np.sum(weights) if not np.any(
+            np.isnan(x)) else np.nan,
+        raw=True)
+
+
+def calculate_connors_rsi(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        lenrsi: int = 3,
+        lenupdown: int = 2,
+        lenroc: int = 100) -> pd.Series:
+    """
+    Calculate Connors RSI (CRSI) indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        lenrsi (int): Length for RSI calculation (default: 3, min: 1)
+        lenupdown (int): Length for UpDown RSI calculation (default: 2, min: 1)
+        lenroc (int): Length for Percent Rank of ROC (default: 100, min: 1)
+
+    Returns:
+        pd.Series: Series containing CRSI values (average of RSI, UpDown RSI, and Percent Rank), aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if lenrsi < 1 or lenupdown < 1 or lenroc < 1:
+        raise ValueError("Length parameters must be at least 1")
+
+    # Calculate standard RSI
+    src = data_close
+    delta = src.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=lenrsi).mean()
+    avg_loss = loss.rolling(window=lenrsi).mean()
+    rs = avg_gain / avg_loss.where(avg_loss != 0, np.nan)
+    rsi = 100 - (100 / (1 + rs))
+
+    ud = pd.Series(0.0, index=src.index)
+    for i in range(1, len(src)):
+        if src.iloc[i] == src.iloc[i - 1]:
+            ud.iloc[i] = 0
+        elif src.iloc[i] > src.iloc[i - 1]:
+            ud.iloc[i] = 1 if ud.iloc[i - 1] <= 0 else ud.iloc[i - 1] + 1
+        else:
+            ud.iloc[i] = -1 if ud.iloc[i - 1] >= 0 else ud.iloc[i - 1] - 1
+    ud_delta = ud.diff()
+    ud_gain = ud_delta.where(ud_delta > 0, 0)
+    ud_loss = -ud_delta.where(ud_delta < 0, 0)
+    ud_avg_gain = ud_gain.rolling(window=lenupdown).mean()
+    ud_avg_loss = ud_loss.rolling(window=lenupdown).mean()
+    ud_rs = ud_avg_gain / ud_avg_loss.where(ud_avg_loss != 0, np.nan)
+    updownrsi = 100 - (100 / (1 + ud_rs))
+    roc = src.pct_change(periods=1) * 100
+    percentrank = roc.rolling(window=lenroc).apply(lambda x: np.sum(x[-1] > x[:-1]) / (
+        len(x) - 1) * 100 if not np.any(np.isnan(x)) and len(x) > 1 else np.nan, raw=True)
+    crsi = (rsi + updownrsi + percentrank) / 3
+
+    return crsi
+
+
+def calculate_choppiness_index(
+        data_open: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        length: int = 14,
+        offset: int = 0) -> pd.Series:
+    """
+    Calculate Choppiness Index (CHOP) indicator as a pd.Series.
+
+    Args:
+        data_open (pd.Series): Input pandas Series with open price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        length (int): Lookback period for calculation (default: 14, min: 1)
+        offset (int): Offset for CHOP values (default: 0, min: -500, max: 500)
+
+    Returns:
+        pd.Series: Series containing Choppiness Index values, aligned with input index
+    """
+    if not (
+        data_open.index.equals(
+            data_high.index) and data_high.index.equals(
+            data_low.index) and data_low.index.equals(
+                data_close.index)):
+        raise ValueError("All input Series must have the same index")
+
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+
+    if offset < -500 or offset > 500:
+        raise ValueError("Offset must be between -500 and 500")
+
+    tr1 = data_high - data_low
+    tr2 = np.abs(data_high - data_close.shift(1))
+    tr3 = np.abs(data_low - data_close.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    atr_sum = tr.rolling(window=length).sum()
+
+    range_ = data_high.rolling(window=length).max(
+    ) - data_low.rolling(window=length).min()
+
+    ci = 100 * np.log10(atr_sum / range_.where(range_ !=
+                        0, np.nan)) / np.log10(length)
+
+    ci = ci.shift(offset)
+
+    return ci
