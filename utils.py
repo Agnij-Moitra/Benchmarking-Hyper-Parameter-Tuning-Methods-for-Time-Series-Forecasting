@@ -335,7 +335,31 @@ def calculate_momentum(data: pd.Series, n: int) -> pd.Series:
     return data - data.shift(n)
 
 
-def calculate_stochastic_rsi(
+def calculate_stochastic_rsi_k(
+        data: pd.Series,
+        rsi_period: int = 14,
+        stoch_period: int = 14,
+        smooth_k: int = 3) -> pd.Series:
+    """
+    Calculate Stochastic RSI for a pandas Series.
+
+    Args:
+        data (pd.Series): Input pandas Series with numerical data
+        rsi_period (int): Period for RSI calculation (default: 14)
+        stoch_period (int): Period for Stochastic calculation (default: 14)
+        smooth_k (int): Smoothing period for %K line (default: 3)
+
+    Returns:
+        pd.Series: Series containing Stochastic RSI %K values
+    """
+    rsi = calculate_rsi(data=data, n=rsi_period)
+    lowest_rsi = rsi.rolling(window=stoch_period).min()
+    highest_rsi = rsi.rolling(window=stoch_period).max()
+    return (((rsi - lowest_rsi) / (highest_rsi - lowest_rsi))
+            * 100).rolling(window=smooth_k).mean()
+
+
+def calculate_stochastic_rsi_k(
         data: pd.Series,
         rsi_period: int = 14,
         stoch_period: int = 14,
@@ -357,13 +381,8 @@ def calculate_stochastic_rsi(
     rsi = calculate_rsi(data=data, n=rsi_period)
     lowest_rsi = rsi.rolling(window=stoch_period).min()
     highest_rsi = rsi.rolling(window=stoch_period).max()
-
-    # Calculate %K
-    stoch_rsi_k = ((rsi - lowest_rsi) / (highest_rsi - lowest_rsi)) * 100
-    return stoch_rsi_k.rolling(window=smooth_k).mean()
-
-    # Calculate %D (optional, not returned in this implementation)
-    # stoch_rsi_d = stoch_rsi_k_smooth.rolling(window=smooth_d).mean()
+    return (((rsi - lowest_rsi) / (highest_rsi - lowest_rsi)) *
+            100).rolling(window=smooth_k).mean().rolling(window=smooth_d).mean()
 
 
 def calculate_ppo(
@@ -1021,8 +1040,8 @@ def commodity_channel_index(data_high: pd.Series,
         pd.Series: CCI values
     """
     typical_price = (data_high + data_low + data_close) / 3
-    return (typical_price - typical_price.rolling(window=period).mean()) / (0.015 * \
-            typical_price.rolling(window=period).apply(lambda x: pd.Series(x).mad(), raw=False))
+    return (typical_price - typical_price.rolling(window=period).mean()) / (0.015 *
+                                                                            typical_price.rolling(window=period).apply(lambda x: pd.Series(x).mad(), raw=False))
 
 
 def chande_momentum_oscillator(
@@ -1540,3 +1559,797 @@ def calculate_kst(data: pd.Series,
     """
     return sum([roc.ewm(span=smoothing_periods[i], adjust=False).mean() for i, roc in enumerate(
         [(data - data.shift(period)) / data.shift(period) * 100 for period in roc_periods])])
+
+
+def atr(
+        high: pd.Series,
+        low: pd.Series,
+        close: pd.Series,
+        period: int = 14) -> pd.Series:
+    """
+    Calculate the Average True Range (ATR).
+
+    Args:
+        high (pd.Series): High prices
+        low (pd.Series): Low prices
+        close (pd.Series): Close prices
+        period (int): Averaging period, default 14
+
+    Returns:
+        pd.Series: ATR values
+    """
+    prev_close = close.shift(1)
+    return pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs()
+    ], axis=1).max(axis=1).rolling(window=period, min_periods=1).mean()
+
+
+def get_base_fractal_points(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        N: int = 25) -> pd.Series:
+    result = pd.Series(index=data_high.index, dtype=float)
+    for i in range(N, len(data_high)):
+        if data_high[i] == data_high[i - N + 1:i + 1].max():
+            result.iloc[i] = data_high[i]
+        elif data_low[i] == data_low[i - N + 1:i + 1].min():
+            result.iloc[i] = data_low[i]
+    return result
+
+
+def get_higher_fractal_points(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        N: int = 25) -> pd.Series:
+    periodF = int(N ** ((1 + 5 ** 0.5) / 2))
+    result = pd.Series(index=data_high.index, dtype=float)
+    for i in range(periodF, len(data_high)):
+        if data_high[i] == data_high[i - periodF + 1:i + 1].max():
+            result.iloc[i] = data_high[i]
+        elif data_low[i] == data_low[i - periodF + 1:i + 1].min():
+            result.iloc[i] = data_low[i]
+    return result
+
+
+def adx_proxy_from_typical_price(data: pd.Series, N: int = 14) -> pd.Series:
+    return 100 * data.diff().abs().rolling(window=N).mean() / \
+        data.rolling(window=N).mean()
+
+
+def calculate_adx(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        N: int = 14) -> pd.Series:
+    """
+    Calculate the ADX (Average Directional Index) based on price data (high, low, close).
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        N (int): Smoothing period, default is 14
+
+    Returns:
+        pd.Series: The ADX (Average Directional Index) values as a pandas Series
+    """
+    plus_dm = data_high.diff()
+    minus_dm = data_low.diff()
+    plus_dm[plus_dm < 0] = 0
+    minus_dm[minus_dm < 0] = 0
+    smoothed_tr = pd.concat([data_high - data_low,
+                             (data_high - data_close.shift(1)).abs(),
+                             (data_low - data_close.shift(1)).abs()],
+                            axis=1).max(axis=1).rolling(window=N,
+                                                        min_periods=1).sum()
+    plus_di = 100 * plus_dm.rolling(window=N,
+                                    min_periods=1).sum() / smoothed_tr
+    minus_di = 100 * minus_dm.rolling(window=N,
+                                      min_periods=1).sum() / smoothed_tr
+    return (100 * abs(plus_di - minus_di) / (plus_di + minus_di)
+            ).rolling(window=N, min_periods=1).mean()
+
+
+def get_mean_line(data_close: pd.Series, window: int = 20) -> pd.Series:
+    """
+    Rolling mean (middle line).
+    """
+    return data_close.rolling(window=window).mean()
+
+
+def get_up_band1(data_close: pd.Series, window: int = 20) -> pd.Series:
+    """
+    Upper Band 1: Mean + 1 * Std.
+    """
+    mean = get_mean_line(data_close, window)
+    std = data_close.rolling(window=window).std()
+    return mean + std
+
+
+def get_lo_band1(data_close: pd.Series, window: int = 20) -> pd.Series:
+    """
+    Lower Band 1: Mean - 1 * Std.
+    """
+    mean = get_mean_line(data_close, window)
+    std = data_close.rolling(window=window).std()
+    return mean - std
+
+
+def get_up_band2(data_close: pd.Series, window: int = 20) -> pd.Series:
+    """
+    Upper Band 2: Mean + 2 * Std.
+    """
+    mean = get_mean_line(data_close, window)
+    std = data_close.rolling(window=window).std()
+    return mean + 2 * std
+
+
+def get_lo_band2(data_close: pd.Series, window: int = 20) -> pd.Series:
+    """
+    Lower Band 2: Mean - 2 * Std.
+    """
+    mean = get_mean_line(data_close, window)
+    std = data_close.rolling(window=window).std()
+    return mean - 2 * std
+
+
+def get_band_range(data_close: pd.Series, window: int = 20) -> pd.Series:
+    """
+    Range: UpBand2 - LoBand2.
+    """
+    upband2 = get_up_band2(data_close, window)
+    loband2 = get_lo_band2(data_close, window)
+    return upband2 - loband2
+
+
+def calculate_parabolic_sar_with_trend(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        af_start: float = 0.01,
+        af_increment: float = 0.001,
+        af_max: float = 0.2) -> pd.Series:
+    """
+    Calculate Parabolic SAR (Stop and Reverse) with trend identification for pandas Series of high, low, and close data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high demand data
+        data_low (pd.Series): Input pandas Series with low demand data
+        data_close (pd.Series): Input pandas Series with close demand data
+        af_start (float): Starting acceleration factor (default: 0.02)
+        af_increment (float): Increment for acceleration factor (default: 0.02)
+        af_max (float): Maximum acceleration factor (default: 0.2)
+
+    Returns:
+        pd.Series: Tuple containing Parabolic SAR values
+    """
+    # Initialize variables
+    sar = pd.Series(index=data_high.index, dtype=float)
+    trend = pd.Series(index=data_high.index, dtype=float)
+    af = af_start
+    ep = 0.0
+    prior_sar = 0.0
+
+    if len(data_high) < 2:
+        return sar, trend
+    sar.iloc[0] = data_low.iloc[0]
+    trend.iloc[0] = 1  # Assume uptrend initially
+
+    for i in range(1, len(data_high)):
+        high = data_high.iloc[i]
+        low = data_low.iloc[i]
+        prior_high = data_high.iloc[i - 1]
+        prior_low = data_low.iloc[i - 1]
+
+        if i == 1:
+            trend.iloc[i] = 1 if data_high.iloc[1] > data_high.iloc[0] else -1
+            ep = high if trend.iloc[i] == 1 else low
+            prior_sar = sar.iloc[0]
+            sar.iloc[i] = prior_sar
+            continue
+
+        if trend.iloc[i - 1] == 1:
+            current_sar = prior_sar + af * (ep - prior_sar)
+            current_sar = min(current_sar, prior_low, data_low.iloc[i - 2])
+            if low < current_sar:
+                trend.iloc[i] = -1
+                current_sar = ep
+                ep = low
+                af = af_start
+            else:
+                trend.iloc[i] = 1
+                if high > ep:
+                    ep = high
+                    af = min(af + af_increment, af_max)
+
+        else:
+            current_sar = prior_sar - af * (prior_sar - ep)
+            current_sar = max(current_sar, prior_high, data_high.iloc[i - 2])
+            if high > current_sar:
+                trend.iloc[i] = 1
+                current_sar = ep
+                ep = high
+                af = af_start
+            else:
+                trend.iloc[i] = -1
+                if low < ep:
+                    ep = low
+                    af = min(af + af_increment, af_max)
+
+        sar.iloc[i] = current_sar
+        prior_sar = current_sar
+
+    return sar
+
+
+def calculate_tenkan_sen(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n: int = 9) -> pd.Series:
+    """
+    Calculate Tenkan-Sen (Conversion Line) for pandas Series of high and low data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high demand data
+        data_low (pd.Series): Input pandas Series with low demand data
+        n (int): Period for Tenkan-Sen calculation (default: 9)
+
+    Returns:
+        pd.Series: Series containing Tenkan-Sen values
+    """
+    return (data_high.rolling(window=n).max() +
+            data_low.rolling(window=n).min()) / 2
+
+
+def calculate_kijun_sen(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n: int = 26) -> pd.Series:
+    """
+    Calculate Kijun-Sen (Base Line) for pandas Series of high and low data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high demand data
+        data_low (pd.Series): Input pandas Series with low demand data
+        n (int): Period for Kijun-Sen calculation (default: 26)
+
+    Returns:
+        pd.Series: Series containing Kijun-Sen values
+    """
+    return (data_high.rolling(window=n).max() +
+            data_low.rolling(window=n).min()) / 2
+
+
+def calculate_chikou_span(data_close: pd.Series, n: int = 26) -> pd.Series:
+    """
+    Calculate Chikou Span (Lagging Span) for pandas Series of close data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close demand data
+        n (int): Period to shift back for Chikou Span (default: 26)
+
+    Returns:
+        pd.Series: Series containing Chikou Span values
+    """
+    return data_close.shift(-n)
+
+
+def calculate_keltner_middle(data_close: pd.Series, n: int = 20) -> pd.Series:
+    """
+    Calculate Keltner Channels Middle Line (EMA) for pandas Series of close data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close demand data
+        n (int): Period for EMA calculation (default: 20)
+
+    Returns:
+        pd.Series: Series containing Keltner Channels Middle Line (EMA) values
+    """
+    # Calculate EMA for the middle line
+    middle_line = data_close.ewm(span=n, adjust=False).mean()
+    return middle_line
+
+
+def calculate_keltner_upper(
+        data_close: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n_ema: int = 20,
+        n_atr: int = 10,
+        multiplier: float = 2.0) -> pd.Series:
+    """
+    Calculate Keltner Channels Upper Band for pandas Series of close, high, and low data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close demand data
+        data_high (pd.Series): Input pandas Series with high demand data
+        data_low (pd.Series): Input pandas Series with low demand data
+        n_ema (int): Period for EMA calculation (default: 20)
+        n_atr (int): Period for ATR calculation (default: 10)
+        multiplier (float): Multiplier for ATR (default: 2.0)
+
+    Returns:
+        pd.Series: Series containing Keltner Channels Upper Band values
+    """
+    # Calculate EMA
+    ema = data_close.ewm(span=n_ema, adjust=False).mean()
+
+    # Calculate True Range (TR)
+    tr1 = data_high - data_low
+    tr2 = abs(data_high - data_close.shift(1))
+    tr3 = abs(data_low - data_close.shift(1))
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    # Calculate ATR
+    atr = true_range.rolling(window=n_atr).mean()
+
+    # Calculate Upper Band: EMA + (multiplier * ATR)
+    upper_band = ema + (multiplier * atr)
+
+    return upper_band
+
+
+def calculate_keltner_lower(
+        data_close: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n_ema: int = 20,
+        n_atr: int = 10,
+        multiplier: float = 2.0) -> pd.Series:
+    """
+    Calculate Keltner Channels Lower Band for pandas Series of close, high, and low data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close demand data
+        data_high (pd.Series): Input pandas Series with high demand data
+        data_low (pd.Series): Input pandas Series with low demand data
+        n_ema (int): Period for EMA calculation (default: 20)
+        n_atr (int): Period for ATR calculation (default: 10)
+        multiplier (float): Multiplier for ATR (default: 2.0)
+
+    Returns:
+        pd.Series: Series containing Keltner Channels Lower Band values
+    """
+    return data_close.ewm(span=n_ema,
+                          adjust=False).mean() - (multiplier * pd.concat([data_high - data_low,
+                                                                          abs(data_high - data_close.shift(1)),
+                                                                          abs(data_low - data_close.shift(1))],
+                                                                         axis=1).max(axis=1).rolling(window=n_atr).mean())
+
+
+def calculate_kdj_k(
+        data_close: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n: int = 9,
+        k_smooth: int = 3) -> pd.Series:
+    """
+    Calculate KDJ %K Line for pandas Series of close, high, and low data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close demand data
+        data_high (pd.Series): Input pandas Series with high demand data
+        data_low (pd.Series): Input pandas Series with low demand data
+        n (int): Period for RSV calculation (default: 9)
+        k_smooth (int): Period for smoothing %K (default: 3)
+
+    Returns:
+        pd.Series: Series containing %K values
+    """
+    lowest_low = data_low.rolling(window=n).min()
+    highest_high = data_high.rolling(window=n).max()
+    rsv = ((data_close - lowest_low) / (highest_high - lowest_low)
+           ).where(highest_high != lowest_low, 0) * 100
+    k = pd.Series(index=data_close.index, dtype=float)
+    k.iloc[:n - 1] = 50
+    for i in range(n - 1, len(data_close)):
+        if i == n - 1:
+            k.iloc[i] = (2 / 3) * 50 + (1 / 3) * rsv.iloc[i]
+        else:
+            k.iloc[i] = (2 / 3) * k.iloc[i - 1] + (1 / 3) * rsv.iloc[i]
+    return k
+
+
+def calculate_kdj_d(
+        data_close: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n: int = 9,
+        k_smooth: int = 3,
+        d_smooth: int = 3) -> pd.Series:
+    """
+    Calculate KDJ %D Line for pandas Series of close, high, and low data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close demand data
+        data_high (pd.Series): Input pandas Series with high demand data
+        data_low (pd.Series): Input pandas Series with low demand data
+        n (int): Period for RSV calculation (default: 9)
+        k_smooth (int): Period for smoothing %K (default: 3)
+        d_smooth (int): Period for smoothing %D (default: 3)
+
+    Returns:
+        pd.Series: Series containing %D values
+    """
+    k = calculate_kdj_k(data_close, data_high, data_low, n, k_smooth)
+    d = pd.Series(index=k.index, dtype=float)
+    d.iloc[:d_smooth - 1] = 50
+    for i in range(d_smooth - 1, len(k)):
+        if i == d_smooth - 1:
+            d.iloc[i] = (2 / 3) * 50 + (1 / 3) * k.iloc[i]
+        else:
+            d.iloc[i] = (2 / 3) * d.iloc[i - 1] + (1 / 3) * k.iloc[i]
+    return d
+
+
+def calculate_kdj_j(
+        data_close: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n: int = 9,
+        k_smooth: int = 3,
+        d_smooth: int = 3) -> pd.Series:
+    """
+    Calculate KDJ %J Line for pandas Series of close, high, and low data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close demand data
+        data_high (pd.Series): Input pandas Series with high demand data
+        data_low (pd.Series): Input pandas Series with low demand data
+        n (int): Period for RSV calculation (default: 9)
+        k_smooth (int): Period for smoothing %K (default: 3)
+        d_smooth (int): Period for smoothing %D (default: 3)
+
+    Returns:
+        pd.Series: Series containing %J values
+    """
+    return 3 * calculate_kdj_k(data_close,
+                               data_high,
+                               data_low,
+                               n,
+                               k_smooth) - 2 * calculate_kdj_d(data_close,
+                                                               data_high,
+                                                               data_low,
+                                                               n,
+                                                               k_smooth,
+                                                               d_smooth)
+
+
+def calculate_mcclellan_oscillator(
+        data_close: pd.Series,
+        short_ema: int = 19,
+        long_ema: int = 39) -> pd.Series:
+    """
+    Calculate a modified McClellan Oscillator for a pandas Series of price data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close price data
+        short_ema (int): Period for short-term EMA (default: 19)
+        long_ema (int): Period for long-term EMA (default: 39)
+
+    Returns:
+        pd.Series: Series containing modified McClellan Oscillator values
+    """
+    price_diff = data_close.diff()
+    net_advances = price_diff.where(
+        price_diff > 0, 0) + price_diff.where(price_diff < 0, 0)
+    return net_advances.ewm(span=short_ema, adjust=False).mean(
+    ) - net_advances.ewm(span=long_ema, adjust=False).mean()
+
+
+def calculate_donchian_upper(data_high: pd.Series, n: int = 20) -> pd.Series:
+    """
+    Calculate Donchian Channels Upper Band for pandas Series of high data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high price data
+        n (int): Period for highest high calculation (default: 20)
+
+    Returns:
+        pd.Series: Series containing Donchian Channels Upper Band values
+    """
+    return data_high.rolling(window=n).max()
+
+
+def calculate_donchian_lower(data_low: pd.Series, n: int = 20) -> pd.Series:
+    """
+    Calculate Donchian Channels Lower Band for pandas Series of low data.
+
+    Args:
+        data_low (pd.Series): Input pandas Series with low price data
+        n (int): Period for lowest low calculation (default: 20)
+
+    Returns:
+        pd.Series: Series containing Donchian Channels Lower Band values
+    """
+    return data_low.rolling(window=n).min()
+
+
+def calculate_donchian_middle(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        n: int = 20) -> pd.Series:
+    """
+    Calculate Donchian Channels Middle Line for pandas Series of high and low data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        n (int): Period for calculation (default: 20)
+
+    Returns:
+        pd.Series: Series containing Donchian Channels Middle Line values
+    """
+    return (data_high.rolling(window=n).max() +
+            data_low.rolling(window=n).min()) / 2
+
+
+def calculate_supertrend_line(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        atr_period: int = 10,
+        multiplier: float = 3.0) -> pd.Series:
+    """
+    Calculate SuperTrend line for pandas Series of high, low, and close data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        atr_period (int): Period for ATR calculation (default: 10)
+        multiplier (float): Multiplier for ATR (default: 3.0)
+
+    Returns:
+        pd.Series: Series containing SuperTrend line values
+    """
+    tr1 = data_high - data_low
+    tr2 = abs(data_high - data_close.shift(1))
+    tr3 = abs(data_low - data_close.shift(1))
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = true_range.rolling(window=atr_period).mean()
+
+    supertrend = pd.Series(index=data_close.index, dtype=float)
+    upper_band = pd.Series(index=data_close.index, dtype=float)
+    lower_band = pd.Series(index=data_close.index, dtype=float)
+
+    supertrend.iloc[0] = data_close.iloc[0]
+    upper_band.iloc[0] = data_close.iloc[0] + (multiplier * atr.iloc[0])
+    lower_band.iloc[0] = data_close.iloc[0] - (multiplier * atr.iloc[0])
+
+    for i in range(1, len(data_close)):
+        basic_upper = (
+            data_high.iloc[i] + data_low.iloc[i]) / 2 + (multiplier * atr.iloc[i])
+        basic_lower = (
+            data_high.iloc[i] + data_low.iloc[i]) / 2 - (multiplier * atr.iloc[i])
+
+        upper_band.iloc[i] = basic_upper if basic_upper < upper_band.iloc[i -
+                                                                          1] or data_close.iloc[i -
+                                                                                                1] > upper_band.iloc[i -
+                                                                                                                     1] else upper_band.iloc[i -
+                                                                                                                                             1]
+        lower_band.iloc[i] = basic_lower if basic_lower > lower_band.iloc[i -
+                                                                          1] or data_close.iloc[i -
+                                                                                                1] < lower_band.iloc[i -
+                                                                                                                     1] else lower_band.iloc[i -
+                                                                                                                                             1]
+
+        if data_close.iloc[i] > upper_band.iloc[i - 1]:
+            supertrend.iloc[i] = lower_band.iloc[i]
+        elif data_close.iloc[i] < lower_band.iloc[i - 1]:
+            supertrend.iloc[i] = upper_band.iloc[i]
+        else:
+            supertrend.iloc[i] = lower_band.iloc[i] if supertrend.iloc[i - \
+                1] == lower_band.iloc[i - 1] else upper_band.iloc[i]
+
+    return supertrend
+
+
+def calculate_supertrend_trend(
+        data_high: pd.Series,
+        data_low: pd.Series,
+        data_close: pd.Series,
+        atr_period: int = 10,
+        multiplier: float = 3.0) -> pd.Series:
+    """
+    Calculate SuperTrend trend direction for pandas Series of high, low, and close data.
+
+    Args:
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        data_close (pd.Series): Input pandas Series with close price data
+        atr_period (int): Period for ATR calculation (default: 10)
+        multiplier (float): Multiplier for ATR (default: 3.0)
+
+    Returns:
+        pd.Series: Series containing trend direction values (1 for uptrend, -1 for downtrend)
+    """
+    tr1 = data_high - data_low
+    tr2 = abs(data_high - data_close.shift(1))
+    tr3 = abs(data_low - data_close.shift(1))
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = true_range.rolling(window=atr_period).mean()
+
+    trend = pd.Series(index=data_close.index, dtype=float)
+    upper_band = pd.Series(index=data_close.index, dtype=float)
+    lower_band = pd.Series(index=data_close.index, dtype=float)
+
+    trend.iloc[0] = 1
+    upper_band.iloc[0] = data_close.iloc[0] + (multiplier * atr.iloc[0])
+    lower_band.iloc[0] = data_close.iloc[0] - (multiplier * atr.iloc[0])
+
+    for i in range(1, len(data_close)):
+        basic_upper = (
+            data_high.iloc[i] + data_low.iloc[i]) / 2 + (multiplier * atr.iloc[i])
+        basic_lower = (
+            data_high.iloc[i] + data_low.iloc[i]) / 2 - (multiplier * atr.iloc[i])
+
+        upper_band.iloc[i] = basic_upper if basic_upper < upper_band.iloc[i -
+                                                                          1] or data_close.iloc[i -
+                                                                                                1] > upper_band.iloc[i -
+                                                                                                                     1] else upper_band.iloc[i -
+                                                                                                                                             1]
+        lower_band.iloc[i] = basic_lower if basic_lower > lower_band.iloc[i -
+                                                                          1] or data_close.iloc[i -
+                                                                                                1] < lower_band.iloc[i -
+                                                                                                                     1] else lower_band.iloc[i -
+                                                                                                                                             1]
+
+        if data_close.iloc[i] > upper_band.iloc[i - 1]:
+            trend.iloc[i] = 1
+        elif data_close.iloc[i] < lower_band.iloc[i - 1]:
+            trend.iloc[i] = -1
+        else:
+            trend.iloc[i] = trend.iloc[i - 1]
+
+    return trend
+
+
+def calculate_moses_indicator(
+        data_close: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        ma1_period: int = 10,
+        ma2_period: int = 20,
+        ma3_period: int = 50,
+        ma4_period: int = 100,
+        shock_threshold: float = 5.0,
+        crash_threshold: float = 10.0) -> pd.Series:
+    """
+    Calculate MOSES Indicator value for pandas Series of close, high, and low data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        ma1_period (int): Period for first moving average (default: 10)
+        ma2_period (int): Period for second moving average (default: 20)
+        ma3_period (int): Period for third moving average (default: 50)
+        ma4_period (int): Period for fourth moving average (default: 100)
+        shock_threshold (float): Percentage price drop for shock event (default: 5.0)
+        crash_threshold (float): Percentage price drop for catastrophic event (default: 10.0)
+
+    Returns:
+        pd.Series: Series containing MOSES Indicator values
+    """
+    ma1 = data_close.rolling(window=ma1_period).mean()
+    ma2 = data_close.rolling(window=ma2_period).mean()
+    ma3 = data_close.rolling(window=ma3_period).mean()
+    ma4 = data_close.rolling(window=ma4_period).mean()
+    weekly_pct_change = data_close.pct_change() * 100
+    moses = pd.Series(0.0, index=data_close.index)
+    for i in range(1, len(data_close)):
+        if (ma1.iloc[i] > ma2.iloc[i] > ma3.iloc[i] > ma4.iloc[i] and
+                weekly_pct_change.iloc[i] > 0):
+            moses.iloc[i] = 1.0
+        elif (ma1.iloc[i] < ma2.iloc[i] < ma3.iloc[i] < ma4.iloc[i] or
+              weekly_pct_change.iloc[i] < -crash_threshold):
+            moses.iloc[i] = -1.0
+        elif (moses.iloc[i - 1] < 0 and data_close.iloc[i] > ma1.iloc[i]):
+            moses.iloc[i] = 0.5
+        elif weekly_pct_change.iloc[i] < -shock_threshold:
+            moses.iloc[i] = -0.5
+        else:
+            moses.iloc[i] = moses.iloc[i - 1]
+    return moses
+
+
+def calculate_moses_signal(
+        data_close: pd.Series,
+        data_high: pd.Series,
+        data_low: pd.Series,
+        ma1_period: int = 10,
+        ma2_period: int = 20,
+        ma3_period: int = 50,
+        ma4_period: int = 100,
+        shock_threshold: float = 5.0,
+        crash_threshold: float = 10.0) -> pd.Series:
+    """
+    Calculate MOSES Signal type for pandas Series of close, high, and low data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close price data
+        data_high (pd.Series): Input pandas Series with high price data
+        data_low (pd.Series): Input pandas Series with low price data
+        ma1_period (int): Period for first moving average (default: 10)
+        ma2_period (int): Period for second moving average (default: 20)
+        ma3_period (int): Period for third moving average (default: 50)
+        ma4_period (int): Period for fourth moving average (default: 100)
+        shock_threshold (float): Percentage price drop for shock event (default: 5.0)
+        crash_threshold (float): Percentage price drop for catastrophic event (default: 10.0)
+
+    Returns:
+        pd.Series: Series containing MOSES Signal types (1: Bull, -1: Bear, 0.5: Recovery, -0.5: Shock, -2: Catastrophe)
+    """
+    ma1 = data_close.rolling(window=ma1_period).mean()
+    ma2 = data_close.rolling(window=ma2_period).mean()
+    ma3 = data_close.rolling(window=ma3_period).mean()
+    ma4 = data_close.rolling(window=ma4_period).mean()
+    weekly_pct_change = data_close.pct_change() * 100
+    signal = pd.Series(0.0, index=data_close.index)
+    for i in range(1, len(data_close)):
+        if (ma1.iloc[i] > ma2.iloc[i] > ma3.iloc[i] > ma4.iloc[i] and
+                weekly_pct_change.iloc[i] > 0):
+            signal.iloc[i] = 1.0
+        elif ma1.iloc[i] < ma2.iloc[i] < ma3.iloc[i] < ma4.iloc[i]:
+            signal.iloc[i] = -1.0
+        elif (signal.iloc[i - 1] < 0 and data_close.iloc[i] > ma1.iloc[i]):
+            signal.iloc[i] = 0.5
+        elif weekly_pct_change.iloc[i] < -shock_threshold:
+            signal.iloc[i] = -0.5
+        elif weekly_pct_change.iloc[i] < -crash_threshold:
+            signal.iloc[i] = -2.0
+        else:
+            signal.iloc[i] = signal.iloc[i - 1]
+    return signal
+
+
+def calculate_iv_rank(
+        data_close: pd.Series,
+        lookback: int = 252,
+        period: int = 30) -> pd.Series:
+    """
+    Calculate Implied Volatility Rank (IVR) for pandas Series of close price data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close price data
+        lookback (int): Number of days for historical comparison (default: 252)
+        period (int): Period for calculating volatility (default: 30)
+
+    Returns:
+        pd.Series: Series containing IV Rank values (0 to 100)
+    """
+    daily_returns = data_close.pct_change().dropna()
+    iv_proxy = daily_returns.rolling(window=period).std() * np.sqrt(252) * 100
+    iv_high = iv_proxy.rolling(window=lookback).max()
+    iv_low = iv_proxy.rolling(window=lookback).min()
+    iv_rank = ((iv_proxy - iv_low) / (iv_high - iv_low)
+               ).where(iv_high != iv_low, 0) * 100
+    return iv_rank
+
+
+def calculate_iv_percentile(
+        data_close: pd.Series,
+        lookback: int = 252,
+        period: int = 30) -> pd.Series:
+    """
+    Calculate Implied Volatility Percentile (IVP) for pandas Series of close price data.
+
+    Args:
+        data_close (pd.Series): Input pandas Series with close price data
+        lookback (int): Number of days for historical comparison (default: 252)
+        period (int): Period for calculating volatility (default: 30)
+
+    Returns:
+        pd.Series: Series containing IV Percentile values (0 to 100)
+    """
+    daily_returns = data_close.pct_change().dropna()
+    iv_proxy = daily_returns.rolling(window=period).std() * np.sqrt(252) * 100
+    iv_percentile = pd.Series(index=iv_proxy.index, dtype=float)
+    for i in range(lookback - 1, len(iv_proxy)):
+        past_values = iv_proxy.iloc[max(0, i - lookback + 1):i + 1]
+        iv_percentile.iloc[i] = (
+            past_values < iv_proxy.iloc[i]).sum() / len(past_values) * 100
+    return iv_percentile.fillna(0)
