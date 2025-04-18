@@ -106,7 +106,7 @@ def prepare_time_series(df, frequency):
             continue
 
 
-def calculate_sma(data: pd.Series, n: int) -> pd.Series:
+def calculate_sma(data: pd.Series, n: int = 100) -> pd.Series:
     """
     ## Calculate Simple Moving Average (SMA) for a pandas Series.
 
@@ -120,7 +120,7 @@ def calculate_sma(data: pd.Series, n: int) -> pd.Series:
     return data.rolling(window=n).mean()
 
 
-def calculate_ema(data: pd.Series, n: int) -> pd.Series:
+def calculate_ema(data: pd.Series, n: int = 50) -> pd.Series:
     """
     ## Calculate Exponential Moving Average (EMA) for a pandas Series.
 
@@ -134,7 +134,7 @@ def calculate_ema(data: pd.Series, n: int) -> pd.Series:
     return data.ewm(span=n, adjust=False).mean()
 
 
-def calculate_wma(data: pd.Series, n: int) -> pd.Series:
+def calculate_wma(data: pd.Series, n: int = 50) -> pd.Series:
     """
     ## Calculate Weighted Moving Average (WMA) for a pandas Series.
 
@@ -150,7 +150,7 @@ def calculate_wma(data: pd.Series, n: int) -> pd.Series:
         lambda x: np.dot(x, weights) / weights.sum(), raw=True)
 
 
-def calculate_hma(data: pd.Series, n: int) -> pd.Series:
+def calculate_hma(data: pd.Series, n: int=50) -> pd.Series:
     """
     ## Calculate Hull Moving Average (HMA) for a pandas Series.
 
@@ -205,7 +205,7 @@ def calculate_kama(
     return kama
 
 
-def calculate_dma(data: pd.Series, n: int, displacement: int) -> pd.Series:
+def calculate_dma(data: pd.Series, n: int = 50, displacement: int=-20) -> pd.Series:
     """
     Calculate Displaced Moving Average (DMA) for a pandas Series.
 
@@ -220,7 +220,7 @@ def calculate_dma(data: pd.Series, n: int, displacement: int) -> pd.Series:
     return data.rolling(window=n).mean().shift(periods=displacement)
 
 
-def calculate_dema(data: pd.Series, n: int) -> pd.Series:
+def calculate_dema(data: pd.Series, n: int=50) -> pd.Series:
     """
     Calculate Double Exponential Moving Average (DEMA) for a pandas Series.
 
@@ -263,28 +263,28 @@ def calculate_vidya(
     return vidya
 
 
-def calculate_vma(data: pd.Series, n: int, vol_period: int = 20) -> pd.Series:
-    """
-    Calculate Volatility Moving Average (V-MA) for a pandas Series.
+# def calculate_vma(data: pd.Series, n: int=50, vol_period: int = 20) -> pd.Series:
+#     """
+#     Calculate Volatility Moving Average (V-MA) for a pandas Series.
 
-    Args:
-        data (pd.Series): Input pandas Series with numerical data
-        n (int): Base period for moving average
-        vol_period (int): Period for volatility calculation (default: 20)
+#     Args:
+#         data (pd.Series): Input pandas Series with numerical data
+#         n (int): Base period for moving average
+#         vol_period (int): Period for volatility calculation (default: 20)
 
-    Returns:
-        pd.Series: Series containing V-MA values
-    """
-    volatility = data.rolling(window=vol_period).std()
-    vol_weights = volatility / volatility.mean()
-    vma = pd.Series(index=data.index, dtype=float)
-    for i in range(n - 1, len(data)):
-        window = data.iloc[i - n + 1:i + 1]
-        weights = vol_weights.iloc[i - n + 1:i + 1]
-        if len(window) == n and not weights.isna().any():
-            weighted_avg = np.average(window, weights=weights)
-            vma.iloc[i] = weighted_avg
-    return vma
+#     Returns:
+#         pd.Series: Series containing V-MA values
+#     """
+#     volatility = data.rolling(window=vol_period).std()
+#     vol_weights = volatility / volatility.mean()
+#     vma = pd.Series(index=data.index, dtype=float)
+#     for i in range(n - 1, len(data)):
+#         window = data.iloc[i - n + 1:i + 1]
+#         weights = vol_weights.iloc[i - n + 1:i + 1]
+#         if len(window) == n and not weights.isna().any():
+#             weighted_avg = np.average(window, weights=weights)
+#             vma.iloc[i] = weighted_avg
+#     return vma
 
 
 def calculate_rsi(data: pd.Series, n: int = 14) -> pd.Series:
@@ -304,7 +304,7 @@ def calculate_rsi(data: pd.Series, n: int = 14) -> pd.Series:
                                                                                     0).rolling(window=n).mean()))
 
 
-def calculate_roc(data: pd.Series, n: int) -> pd.Series:
+def calculate_roc(data: pd.Series, n: int = 50) -> pd.Series:
     """
     Calculate Rate of Change (ROC) for a pandas Series.
 
@@ -319,7 +319,7 @@ def calculate_roc(data: pd.Series, n: int) -> pd.Series:
     return ((data - series_n) / series_n) * 100
 
 
-def calculate_momentum(data: pd.Series, n: int) -> pd.Series:
+def calculate_momentum_s(data: pd.Series, n: int = 50) -> pd.Series:
     """
     Calculate Momentum Indicator for a pandas Series.
 
@@ -1479,46 +1479,46 @@ def calculate_nth_autocorrelation_series(
     return data.rolling(window=window).apply(lagk_autocorr, raw=True)
 
 
-def calculate_cusum_positive(
-        data: pd.Series,
-        target: float = None) -> pd.Series:
-    """
-    Calculate the positive CUSUM (detect upward shifts) of a time series.
+# def calculate_cusum_positive(
+#         data: pd.Series,
+#         target: float = None) -> pd.Series:
+#     """
+#     Calculate the positive CUSUM (detect upward shifts) of a time series.
 
-    Args:
-        data (pd.Series): Time series input.
-        target (float, optional): Target mean. Defaults to data mean.
+#     Args:
+#         data (pd.Series): Time series input.
+#         target (float, optional): Target mean. Defaults to data mean.
 
-    Returns:
-        pd.Series: Positive CUSUM values.
-    """
-    if target is None:
-        target = data.mean()
-    cusum_pos = [0]
-    for i in range(1, len(data)):
-        cusum_pos.append(max(0, cusum_pos[-1] + (data.iloc[i] - target)))
-    return pd.Series(cusum_pos, index=data.index)
+#     Returns:
+#         pd.Series: Positive CUSUM values.
+#     """
+#     if target is None:
+#         target = data.mean()
+#     cusum_pos = [0]
+#     for i in range(1, len(data)):
+#         cusum_pos.append(max(0, cusum_pos[-1] + (data.iloc[i] - target)))
+#     return pd.Series(cusum_pos, index=data.index)
 
 
-def calculate_cusum_negative(
-        data: pd.Series,
-        target: float = None) -> pd.Series:
-    """
-    Calculate the negative CUSUM (detect downward shifts) of a time series.
+# def calculate_cusum_negative(
+#         data: pd.Series,
+#         target: float = None) -> pd.Series:
+#     """
+#     Calculate the negative CUSUM (detect downward shifts) of a time series.
 
-    Args:
-        data (pd.Series): Time series input.
-        target (float, optional): Target mean. Defaults to data mean.
+#     Args:
+#         data (pd.Series): Time series input.
+#         target (float, optional): Target mean. Defaults to data mean.
 
-    Returns:
-        pd.Series: Negative CUSUM values.
-    """
-    if target is None:
-        target = data.mean()
-    cusum_neg = [0]
-    for i in range(1, len(data)):
-        cusum_neg.append(min(0, cusum_neg[-1] + (data.iloc[i] - target)))
-    return pd.Series(cusum_neg, index=data.index)
+#     Returns:
+#         pd.Series: Negative CUSUM values.
+#     """
+#     if target is None:
+#         target = data.mean()
+#     cusum_neg = [0]
+#     for i in range(1, len(data)):
+#         cusum_neg.append(min(0, cusum_neg[-1] + (data.iloc[i] - target)))
+#     return pd.Series(cusum_neg, index=data.index)
 
 
 def calculate_tsi(data: pd.Series, r: int = 25, s: int = 13) -> pd.Series:
@@ -2037,7 +2037,7 @@ def calculate_mcclellan_oscillator(
     ) - net_advances.ewm(span=long_ema, adjust=False).mean()
 
 
-def calculate_donchian_upper(data_high: pd.Series, n: int = 20) -> pd.Series:
+def calculate_donchian_upper_s(data_high: pd.Series, n: int = 20) -> pd.Series:
     """
     Calculate Donchian Channels Upper Band for pandas Series of high data.
 
@@ -2051,7 +2051,7 @@ def calculate_donchian_upper(data_high: pd.Series, n: int = 20) -> pd.Series:
     return data_high.rolling(window=n).max()
 
 
-def calculate_donchian_lower(data_low: pd.Series, n: int = 20) -> pd.Series:
+def calculate_donchian_lower_s(data_low: pd.Series, n: int = 20) -> pd.Series:
     """
     Calculate Donchian Channels Lower Band for pandas Series of low data.
 
@@ -2353,724 +2353,724 @@ def calculate_iv_percentile(
     return iv_percentile.fillna(0)
 
 
-def calculate_ml_rsi(
-        data_close: pd.Series,
-        rsi_length: int = 14,
-        use_smoothing: bool = True,
-        smoothing_length: int = 3,
-        ma_type: str = "ALMA",
-        alma_sigma: int = 4,
-        use_knn: bool = True,
-        knn_neighbors: int = 5,
-        knn_lookback: int = 100,
-        knn_weight: float = 0.4,
-        feature_count: int = 3,
-        use_filter: bool = True,
-        filter_method: str = "Kalman",
-        filter_strength: float = 0.3) -> pd.Series:
-    """
-    Calculate Machine Learning-enhanced RSI for pandas Series of close, high, and low data.
+# def calculate_ml_rsi(
+#         data_close: pd.Series,
+#         rsi_length: int = 14,
+#         use_smoothing: bool = True,
+#         smoothing_length: int = 3,
+#         ma_type: str = "ALMA",
+#         alma_sigma: int = 4,
+#         use_knn: bool = True,
+#         knn_neighbors: int = 5,
+#         knn_lookback: int = 100,
+#         knn_weight: float = 0.4,
+#         feature_count: int = 3,
+#         use_filter: bool = True,
+#         filter_method: str = "Kalman",
+#         filter_strength: float = 0.3) -> pd.Series:
+#     """
+#     Calculate Machine Learning-enhanced RSI for pandas Series of close, high, and low data.
 
-    Args:
-        data_close (pd.Series): Input pandas Series with close price data
-        data_high (pd.Series): Input pandas Series with high price data
-        data_low (pd.Series): Input pandas Series with low price data
-        rsi_length (int): Period for RSI calculation (default: 14)
-        use_smoothing (bool): Apply moving average to RSI (default: True)
-        smoothing_length (int): Period for moving average (default: 3)
-        ma_type (str): Moving average type (default: "ALMA")
-        alma_sigma (int): Sigma for ALMA (default: 4)
-        use_knn (bool): Enable KNN machine learning (default: True)
-        knn_neighbors (int): Number of KNN neighbors (default: 5)
-        knn_lookback (int): Historical period for KNN (default: 100)
-        knn_weight (float): Weight of KNN vs standard RSI (default: 0.4)
-        feature_count (int): Number of features for KNN (default: 3)
-        use_filter (bool): Apply additional smoothing (default: True)
-        filter_method (str): Smoothing method (default: "Kalman")
-        filter_strength (float): Smoothing parameter (default: 0.3)
+#     Args:
+#         data_close (pd.Series): Input pandas Series with close price data
+#         data_high (pd.Series): Input pandas Series with high price data
+#         data_low (pd.Series): Input pandas Series with low price data
+#         rsi_length (int): Period for RSI calculation (default: 14)
+#         use_smoothing (bool): Apply moving average to RSI (default: True)
+#         smoothing_length (int): Period for moving average (default: 3)
+#         ma_type (str): Moving average type (default: "ALMA")
+#         alma_sigma (int): Sigma for ALMA (default: 4)
+#         use_knn (bool): Enable KNN machine learning (default: True)
+#         knn_neighbors (int): Number of KNN neighbors (default: 5)
+#         knn_lookback (int): Historical period for KNN (default: 100)
+#         knn_weight (float): Weight of KNN vs standard RSI (default: 0.4)
+#         feature_count (int): Number of features for KNN (default: 3)
+#         use_filter (bool): Apply additional smoothing (default: True)
+#         filter_method (str): Smoothing method (default: "Kalman")
+#         filter_strength (float): Smoothing parameter (default: 0.3)
 
-    Returns:
-        pd.Series: Series containing final RSI values
-    """
-    def calc_moving_average(src, length, ma_type, sigma):
-        if ma_type == "SMA":
-            return src.rolling(window=length).mean()
-        elif ma_type == "EMA":
-            return src.ewm(span=length, adjust=False).mean()
-        elif ma_type == "DEMA":
-            e1 = src.ewm(span=length, adjust=False).mean()
-            e2 = e1.ewm(span=length, adjust=False).mean()
-            return 2 * e1 - e2
-        elif ma_type == "TEMA":
-            e1 = src.ewm(span=length, adjust=False).mean()
-            e2 = e1.ewm(span=length, adjust=False).mean()
-            e3 = e2.ewm(span=length, adjust=False).mean()
-            return 3 * (e1 - e2) + e3
-        elif ma_type == "WMA":
-            weights = np.arange(1, length + 1)
-            return src.rolling(
-                window=length).apply(
-                lambda x: np.dot(
-                    x,
-                    weights) /
-                weights.sum(),
-                raw=True)
-        elif ma_type == "SMMA":
-            return src.ewm(alpha=1 / length, adjust=False).mean()
-        elif ma_type == "HMA":
-            wma1 = src.rolling(
-                window=length //
-                2).apply(
-                lambda x: np.dot(
-                    x,
-                    np.arange(
-                        1,
-                        length //
-                        2 +
-                        1)) /
-                np.sum(
-                    np.arange(
-                        1,
-                        length //
-                        2 +
-                        1)),
-                raw=True)
-            wma2 = src.rolling(
-                window=length).apply(
-                lambda x: np.dot(
-                    x,
-                    np.arange(
-                        1,
-                        length +
-                        1)) /
-                np.sum(
-                    np.arange(
-                        1,
-                        length +
-                        1)),
-                raw=True)
-            diff = 2 * wma1 - wma2
-            return diff.rolling(window=int(np.sqrt(length))).apply(lambda x: np.dot(x, np.arange(
-                1, int(np.sqrt(length)) + 1)) / np.sum(np.arange(1, int(np.sqrt(length)) + 1)), raw=True)
-        elif ma_type == "LSMA":
-            return src.rolling(window=length).apply(lambda x: np.polyfit(np.arange(length), x, 1)[
-                1] + np.polyfit(np.arange(length), x, 1)[0] * (length - 1), raw=True)
-        elif ma_type == "ALMA":
-            m = np.floor(0.85 * (length - 1))
-            s = length / sigma
-            w = np.exp(-((np.arange(length) - m) ** 2) / (2 * s ** 2))
-            w = w / w.sum()
-            return src.rolling(
-                window=length).apply(
-                lambda x: np.dot(
-                    x,
-                    w),
-                raw=True)
-        return src
+#     Returns:
+#         pd.Series: Series containing final RSI values
+#     """
+#     def calc_moving_average(src, length, ma_type, sigma):
+#         if ma_type == "SMA":
+#             return src.rolling(window=length).mean()
+#         elif ma_type == "EMA":
+#             return src.ewm(span=length, adjust=False).mean()
+#         elif ma_type == "DEMA":
+#             e1 = src.ewm(span=length, adjust=False).mean()
+#             e2 = e1.ewm(span=length, adjust=False).mean()
+#             return 2 * e1 - e2
+#         elif ma_type == "TEMA":
+#             e1 = src.ewm(span=length, adjust=False).mean()
+#             e2 = e1.ewm(span=length, adjust=False).mean()
+#             e3 = e2.ewm(span=length, adjust=False).mean()
+#             return 3 * (e1 - e2) + e3
+#         elif ma_type == "WMA":
+#             weights = np.arange(1, length + 1)
+#             return src.rolling(
+#                 window=length).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     weights) /
+#                 weights.sum(),
+#                 raw=True)
+#         elif ma_type == "SMMA":
+#             return src.ewm(alpha=1 / length, adjust=False).mean()
+#         elif ma_type == "HMA":
+#             wma1 = src.rolling(
+#                 window=length //
+#                 2).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     np.arange(
+#                         1,
+#                         length //
+#                         2 +
+#                         1)) /
+#                 np.sum(
+#                     np.arange(
+#                         1,
+#                         length //
+#                         2 +
+#                         1)),
+#                 raw=True)
+#             wma2 = src.rolling(
+#                 window=length).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     np.arange(
+#                         1,
+#                         length +
+#                         1)) /
+#                 np.sum(
+#                     np.arange(
+#                         1,
+#                         length +
+#                         1)),
+#                 raw=True)
+#             diff = 2 * wma1 - wma2
+#             return diff.rolling(window=int(np.sqrt(length))).apply(lambda x: np.dot(x, np.arange(
+#                 1, int(np.sqrt(length)) + 1)) / np.sum(np.arange(1, int(np.sqrt(length)) + 1)), raw=True)
+#         elif ma_type == "LSMA":
+#             return src.rolling(window=length).apply(lambda x: np.polyfit(np.arange(length), x, 1)[
+#                 1] + np.polyfit(np.arange(length), x, 1)[0] * (length - 1), raw=True)
+#         elif ma_type == "ALMA":
+#             m = np.floor(0.85 * (length - 1))
+#             s = length / sigma
+#             w = np.exp(-((np.arange(length) - m) ** 2) / (2 * s ** 2))
+#             w = w / w.sum()
+#             return src.rolling(
+#                 window=length).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     w),
+#                 raw=True)
+#         return src
 
-    def get_momentum(src, length):
-        return src - src.shift(length)
+#     def get_momentum(src, length):
+#         return src - src.shift(length)
 
-    def get_volatility(src, length):
-        return src.rolling(window=length).std()
+#     def get_volatility(src, length):
+#         return src.rolling(window=length).std()
 
-    def get_slope(src, length):
-        return src.rolling(
-            window=length).apply(
-            lambda x: np.polyfit(
-                np.arange(length),
-                x,
-                1)[0],
-            raw=True)
+#     def get_slope(src, length):
+#         return src.rolling(
+#             window=length).apply(
+#             lambda x: np.polyfit(
+#                 np.arange(length),
+#                 x,
+#                 1)[0],
+#             raw=True)
 
-    def normalize(src, length):
-        max_val = src.rolling(window=length).max()
-        min_val = src.rolling(window=length).min()
-        value_range = max_val - min_val
-        return (src - min_val) / value_range.where(value_range != 0, 1)
+#     def normalize(src, length):
+#         max_val = src.rolling(window=length).max()
+#         min_val = src.rolling(window=length).min()
+#         value_range = max_val - min_val
+#         return (src - min_val) / value_range.where(value_range != 0, 1)
 
-    def euclidean_distance(v1, v2):
-        return np.sqrt(np.sum((v1 - v2) ** 2))
+#     def euclidean_distance(v1, v2):
+#         return np.sqrt(np.sum((v1 - v2) ** 2))
 
-    delta = data_close.diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window=rsi_length).mean()
-    avg_loss = loss.rolling(window=rsi_length).mean()
-    rs = avg_gain / avg_loss.where(avg_loss != 0, 1)
-    base_rsi = 100 - (100 / (1 + rs))
-    smoothed_rsi = calc_moving_average(
-        base_rsi,
-        smoothing_length,
-        ma_type,
-        alma_sigma) if use_smoothing else base_rsi
-    standard_rsi = smoothed_rsi
+#     delta = data_close.diff()
+#     gain = delta.where(delta > 0, 0)
+#     loss = -delta.where(delta < 0, 0)
+#     avg_gain = gain.rolling(window=rsi_length).mean()
+#     avg_loss = loss.rolling(window=rsi_length).mean()
+#     rs = avg_gain / avg_loss.where(avg_loss != 0, 1)
+#     base_rsi = 100 - (100 / (1 + rs))
+#     smoothed_rsi = calc_moving_average(
+#         base_rsi,
+#         smoothing_length,
+#         ma_type,
+#         alma_sigma) if use_smoothing else base_rsi
+#     standard_rsi = smoothed_rsi
 
-    enhanced_rsi = standard_rsi.copy()
-    if use_knn:
-        for i in range(knn_lookback, len(data_close)):
-            current_features = []
-            current_features.append(
-                normalize(
-                    standard_rsi,
-                    knn_lookback).iloc[i])
-            if feature_count >= 2:
-                current_features.append(
-                    normalize(
-                        get_momentum(
-                            standard_rsi,
-                            3),
-                        knn_lookback).iloc[i])
-            if feature_count >= 3:
-                current_features.append(
-                    normalize(
-                        get_volatility(
-                            standard_rsi,
-                            10),
-                        knn_lookback).iloc[i])
-            if feature_count >= 4:
-                current_features.append(
-                    normalize(
-                        get_slope(
-                            standard_rsi,
-                            5),
-                        knn_lookback).iloc[i])
-            if feature_count >= 5:
-                current_features.append(
-                    normalize(
-                        get_momentum(
-                            data_close,
-                            5),
-                        knn_lookback).iloc[i])
-            current_features = np.array(current_features)
+#     enhanced_rsi = standard_rsi.copy()
+#     if use_knn:
+#         for i in range(knn_lookback, len(data_close)):
+#             current_features = []
+#             current_features.append(
+#                 normalize(
+#                     standard_rsi,
+#                     knn_lookback).iloc[i])
+#             if feature_count >= 2:
+#                 current_features.append(
+#                     normalize(
+#                         get_momentum(
+#                             standard_rsi,
+#                             3),
+#                         knn_lookback).iloc[i])
+#             if feature_count >= 3:
+#                 current_features.append(
+#                     normalize(
+#                         get_volatility(
+#                             standard_rsi,
+#                             10),
+#                         knn_lookback).iloc[i])
+#             if feature_count >= 4:
+#                 current_features.append(
+#                     normalize(
+#                         get_slope(
+#                             standard_rsi,
+#                             5),
+#                         knn_lookback).iloc[i])
+#             if feature_count >= 5:
+#                 current_features.append(
+#                     normalize(
+#                         get_momentum(
+#                             data_close,
+#                             5),
+#                         knn_lookback).iloc[i])
+#             current_features = np.array(current_features)
 
-            distances = []
-            indices = []
-            for j in range(1, knn_lookback + 1):
-                if i - j >= 0:
-                    historical_features = []
-                    historical_features.append(
-                        normalize(standard_rsi, knn_lookback).iloc[i - j])
-                    if feature_count >= 2:
-                        historical_features.append(normalize(get_momentum(
-                            standard_rsi, 3), knn_lookback).iloc[i - j])
-                    if feature_count >= 3:
-                        historical_features.append(normalize(get_volatility(
-                            standard_rsi, 10), knn_lookback).iloc[i - j])
-                    if feature_count >= 4:
-                        historical_features.append(normalize(get_slope(
-                            standard_rsi, 5), knn_lookback).iloc[i - j])
-                    if feature_count >= 5:
-                        historical_features.append(normalize(
-                            get_momentum(data_close, 5), knn_lookback).iloc[i - j])
-                    historical_features = np.array(historical_features)
-                    if len(historical_features) == len(current_features):
-                        dist = euclidean_distance(
-                            current_features, historical_features)
-                        distances.append(dist)
-                        indices.append(i - j)
+#             distances = []
+#             indices = []
+#             for j in range(1, knn_lookback + 1):
+#                 if i - j >= 0:
+#                     historical_features = []
+#                     historical_features.append(
+#                         normalize(standard_rsi, knn_lookback).iloc[i - j])
+#                     if feature_count >= 2:
+#                         historical_features.append(normalize(get_momentum(
+#                             standard_rsi, 3), knn_lookback).iloc[i - j])
+#                     if feature_count >= 3:
+#                         historical_features.append(normalize(get_volatility(
+#                             standard_rsi, 10), knn_lookback).iloc[i - j])
+#                     if feature_count >= 4:
+#                         historical_features.append(normalize(get_slope(
+#                             standard_rsi, 5), knn_lookback).iloc[i - j])
+#                     if feature_count >= 5:
+#                         historical_features.append(normalize(
+#                             get_momentum(data_close, 5), knn_lookback).iloc[i - j])
+#                     historical_features = np.array(historical_features)
+#                     if len(historical_features) == len(current_features):
+#                         dist = euclidean_distance(
+#                             current_features, historical_features)
+#                         distances.append(dist)
+#                         indices.append(i - j)
 
-            if distances:
-                sorted_pairs = sorted(zip(distances, indices))
-                distances, indices = zip(*sorted_pairs)
-                weighted_sum = 0.0
-                weight_sum = 0.0
-                effective_k = min(knn_neighbors, len(distances))
-                for k in range(effective_k):
-                    idx = indices[k]
-                    dist = distances[k]
-                    weight = 1.0 / dist if dist >= 0.0001 else 1.0
-                    neighbor_rsi = standard_rsi.iloc[idx]
-                    if not np.isnan(neighbor_rsi):
-                        weighted_sum += neighbor_rsi * weight
-                        weight_sum += weight
-                if weight_sum > 0:
-                    knn_rsi = weighted_sum / weight_sum
-                    enhanced_rsi.iloc[i] = (
-                        1.0 - knn_weight) * standard_rsi.iloc[i] + knn_weight * knn_rsi
-                    enhanced_rsi.iloc[i] = max(
-                        0.0, min(100.0, enhanced_rsi.iloc[i]))
+#             if distances:
+#                 sorted_pairs = sorted(zip(distances, indices))
+#                 distances, indices = zip(*sorted_pairs)
+#                 weighted_sum = 0.0
+#                 weight_sum = 0.0
+#                 effective_k = min(knn_neighbors, len(distances))
+#                 for k in range(effective_k):
+#                     idx = indices[k]
+#                     dist = distances[k]
+#                     weight = 1.0 / dist if dist >= 0.0001 else 1.0
+#                     neighbor_rsi = standard_rsi.iloc[idx]
+#                     if not np.isnan(neighbor_rsi):
+#                         weighted_sum += neighbor_rsi * weight
+#                         weight_sum += weight
+#                 if weight_sum > 0:
+#                     knn_rsi = weighted_sum / weight_sum
+#                     enhanced_rsi.iloc[i] = (
+#                         1.0 - knn_weight) * standard_rsi.iloc[i] + knn_weight * knn_rsi
+#                     enhanced_rsi.iloc[i] = max(
+#                         0.0, min(100.0, enhanced_rsi.iloc[i]))
 
-    final_rsi = enhanced_rsi
-    if use_filter:
-        if filter_method == "Kalman":
-            kf_rsi = final_rsi.copy()
-            alpha = filter_strength
-            for i in range(1, len(kf_rsi)):
-                kf_rsi.iloc[i] = (1 - alpha) * kf_rsi.iloc[i - 1] + alpha * \
-                    final_rsi.iloc[i] if not np.isnan(kf_rsi.iloc[i - 1]) else final_rsi.iloc[i]
-            final_rsi = kf_rsi
-        elif filter_method == "DoubleEMA":
-            ema1 = final_rsi.ewm(
-                span=round(
-                    filter_strength * 10),
-                adjust=False).mean()
-            final_rsi = ema1.ewm(
-                span=round(
-                    filter_strength * 5),
-                adjust=False).mean()
-        elif filter_method == "ALMA":
-            m = np.floor(0.85 * (round(filter_strength * 20) - 1))
-            s = round(filter_strength * 20) / 6
-            w = np.exp(-((np.arange(round(filter_strength * 20)) - m)
-                       ** 2) / (2 * s ** 2))
-            w = w / w.sum()
-            final_rsi = final_rsi.rolling(
-                window=round(
-                    filter_strength *
-                    20)).apply(
-                lambda x: np.dot(
-                    x,
-                    w) if len(x) == len(w) else np.nan,
-                raw=True)
+#     final_rsi = enhanced_rsi
+#     if use_filter:
+#         if filter_method == "Kalman":
+#             kf_rsi = final_rsi.copy()
+#             alpha = filter_strength
+#             for i in range(1, len(kf_rsi)):
+#                 kf_rsi.iloc[i] = (1 - alpha) * kf_rsi.iloc[i - 1] + alpha * \
+#                     final_rsi.iloc[i] if not np.isnan(kf_rsi.iloc[i - 1]) else final_rsi.iloc[i]
+#             final_rsi = kf_rsi
+#         elif filter_method == "DoubleEMA":
+#             ema1 = final_rsi.ewm(
+#                 span=round(
+#                     filter_strength * 10),
+#                 adjust=False).mean()
+#             final_rsi = ema1.ewm(
+#                 span=round(
+#                     filter_strength * 5),
+#                 adjust=False).mean()
+#         elif filter_method == "ALMA":
+#             m = np.floor(0.85 * (round(filter_strength * 20) - 1))
+#             s = round(filter_strength * 20) / 6
+#             w = np.exp(-((np.arange(round(filter_strength * 20)) - m)
+#                        ** 2) / (2 * s ** 2))
+#             w = w / w.sum()
+#             final_rsi = final_rsi.rolling(
+#                 window=round(
+#                     filter_strength *
+#                     20)).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     w) if len(x) == len(w) else np.nan,
+#                 raw=True)
 
-    return final_rsi
-
-
-def calculate_ml_rsi_overbought(
-        data_close: pd.Series,
-        rsi_length: int = 14,
-        use_smoothing: bool = True,
-        smoothing_length: int = 3,
-        ma_type: str = "ALMA",
-        alma_sigma: int = 4,
-        use_knn: bool = True,
-        knn_lookback: int = 100,
-        feature_count: int = 3) -> pd.Series:
-    """
-    Calculate Machine Learning-enhanced RSI Overbought Threshold for pandas Series of close, high, and low data.
-
-    Args:
-        data_close (pd.Series): Input pandas Series with close price data
-        data_high (pd.Series): Input pandas Series with high price data
-        data_low (pd.Series): Input pandas Series with low price data
-        rsi_length (int): Period for RSI calculation (default: 14)
-        use_smoothing (bool): Apply moving average to RSI (default: True)
-        smoothing_length (int): Period for moving average (default: 3)
-        ma_type (str): Moving average type (default: "ALMA")
-        alma_sigma (int): Sigma for ALMA (default: 4)
-        use_knn (bool): Enable KNN machine learning (default: True)
-        knn_neighbors (int): Number of KNN neighbors (default: 5)
-        knn_lookback (int): Historical period for KNN (default: 100)
-        knn_weight (float): Weight of KNN vs standard RSI (default: 0.4)
-        feature_count (int): Number of features for KNN (default: 3)
-
-    Returns:
-        pd.Series: Series containing overbought threshold values
-    """
-    def calc_moving_average(src, length, ma_type, sigma):
-        if ma_type == "SMA":
-            return src.rolling(window=length).mean()
-        elif ma_type == "EMA":
-            return src.ewm(span=length, adjust=False).mean()
-        elif ma_type == "DEMA":
-            e1 = src.ewm(span=length, adjust=False).mean()
-            e2 = e1.ewm(span=length, adjust=False).mean()
-            return 2 * e1 - e2
-        elif ma_type == "TEMA":
-            e1 = src.ewm(span=length, adjust=False).mean()
-            e2 = e1.ewm(span=length, adjust=False).mean()
-            e3 = e2.ewm(span=length, adjust=False).mean()
-            return 3 * (e1 - e2) + e3
-        elif ma_type == "WMA":
-            weights = np.arange(1, length + 1)
-            return src.rolling(
-                window=length).apply(
-                lambda x: np.dot(
-                    x,
-                    weights) /
-                weights.sum(),
-                raw=True)
-        elif ma_type == "SMMA":
-            return src.ewm(alpha=1 / length, adjust=False).mean()
-        elif ma_type == "HMA":
-            wma1 = src.rolling(
-                window=length //
-                2).apply(
-                lambda x: np.dot(
-                    x,
-                    np.arange(
-                        1,
-                        length //
-                        2 +
-                        1)) /
-                np.sum(
-                    np.arange(
-                        1,
-                        length //
-                        2 +
-                        1)),
-                raw=True)
-            wma2 = src.rolling(
-                window=length).apply(
-                lambda x: np.dot(
-                    x,
-                    np.arange(
-                        1,
-                        length +
-                        1)) /
-                np.sum(
-                    np.arange(
-                        1,
-                        length +
-                        1)),
-                raw=True)
-            diff = 2 * wma1 - wma2
-            return diff.rolling(window=int(np.sqrt(length))).apply(lambda x: np.dot(x, np.arange(
-                1, int(np.sqrt(length)) + 1)) / np.sum(np.arange(1, int(np.sqrt(length)) + 1)), raw=True)
-        elif ma_type == "LSMA":
-            return src.rolling(window=length).apply(lambda x: np.polyfit(np.arange(length), x, 1)[
-                1] + np.polyfit(np.arange(length), x, 1)[0] * (length - 1), raw=True)
-        elif ma_type == "ALMA":
-            m = np.floor(0.85 * (length - 1))
-            s = length / sigma
-            w = np.exp(-((np.arange(length) - m) ** 2) / (2 * s ** 2))
-            w = w / w.sum()
-            return src.rolling(
-                window=length).apply(
-                lambda x: np.dot(
-                    x,
-                    w),
-                raw=True)
-        return src
-
-    def get_momentum(src, length):
-        return src - src.shift(length)
-
-    def get_volatility(src, length):
-        return src.rolling(window=length).std()
-
-    def get_slope(src, length):
-        return src.rolling(
-            window=length).apply(
-            lambda x: np.polyfit(
-                np.arange(length),
-                x,
-                1)[0],
-            raw=True)
-
-    def normalize(src, length):
-        max_val = src.rolling(window=length).max()
-        min_val = src.rolling(window=length).min()
-        value_range = max_val - min_val
-        return (src - min_val) / value_range.where(value_range != 0, 1)
-
-    def euclidean_distance(v1, v2):
-        return np.sqrt(np.sum((v1 - v2) ** 2))
-
-    delta = data_close.diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window=rsi_length).mean()
-    avg_loss = loss.rolling(window=rsi_length).mean()
-    rs = avg_gain / avg_loss.where(avg_loss != 0, 1)
-    base_rsi = 100 - (100 / (1 + rs))
-    smoothed_rsi = calc_moving_average(
-        base_rsi,
-        smoothing_length,
-        ma_type,
-        alma_sigma) if use_smoothing else base_rsi
-    standard_rsi = smoothed_rsi
-
-    overbought = pd.Series(70.0, index=data_close.index)
-    if use_knn:
-        for i in range(knn_lookback, len(data_close)):
-            current_features = []
-            current_features.append(
-                normalize(
-                    standard_rsi,
-                    knn_lookback).iloc[i])
-            if feature_count >= 2:
-                current_features.append(
-                    normalize(
-                        get_momentum(
-                            standard_rsi,
-                            3),
-                        knn_lookback).iloc[i])
-            if feature_count >= 3:
-                current_features.append(
-                    normalize(
-                        get_volatility(
-                            standard_rsi,
-                            10),
-                        knn_lookback).iloc[i])
-            if feature_count >= 4:
-                current_features.append(
-                    normalize(
-                        get_slope(
-                            standard_rsi,
-                            5),
-                        knn_lookback).iloc[i])
-            if feature_count >= 5:
-                current_features.append(
-                    normalize(
-                        get_momentum(
-                            data_close,
-                            5),
-                        knn_lookback).iloc[i])
-            current_features = np.array(current_features)
-
-            distances = []
-            indices = []
-            overbought_candidates = []
-            for j in range(1, knn_lookback + 1):
-                if i - j >= 0:
-                    historical_features = []
-                    historical_features.append(
-                        normalize(standard_rsi, knn_lookback).iloc[i - j])
-                    if feature_count >= 2:
-                        historical_features.append(normalize(get_momentum(
-                            standard_rsi, 3), knn_lookback).iloc[i - j])
-                    if feature_count >= 3:
-                        historical_features.append(normalize(get_volatility(
-                            standard_rsi, 10), knn_lookback).iloc[i - j])
-                    if feature_count >= 4:
-                        historical_features.append(normalize(get_slope(
-                            standard_rsi, 5), knn_lookback).iloc[i - j])
-                    if feature_count >= 5:
-                        historical_features.append(normalize(
-                            get_momentum(data_close, 5), knn_lookback).iloc[i - j])
-                    historical_features = np.array(historical_features)
-                    if len(historical_features) == len(current_features):
-                        dist = euclidean_distance(
-                            current_features, historical_features)
-                        distances.append(dist)
-                        indices.append(i - j)
-                        if i - j + 5 < len(data_close) and not np.isnan(
-                                data_close.iloc[i - j + 5]) and not np.isnan(data_close.iloc[i - j]):
-                            future_return = data_close.iloc[i -
-                                                            j + 5] - data_close.iloc[i - j]
-                            if future_return > data_close.iloc[i - j] * 0.02:
-                                overbought_candidates.append(
-                                    standard_rsi.iloc[i - j])
-
-            if overbought_candidates:
-                overbought.iloc[i] = np.mean(overbought_candidates)
-
-    return overbought
+#     return final_rsi
 
 
-def calculate_ml_rsi_oversold(
-        data_close: pd.Series,
-        rsi_length: int = 14,
-        use_smoothing: bool = True,
-        smoothing_length: int = 3,
-        ma_type: str = "ALMA",
-        alma_sigma: int = 4,
-        use_knn: bool = True,
-        knn_lookback: int = 100,
-        feature_count: int = 3) -> pd.Series:
-    """
-    Calculate Machine Learning-enhanced RSI Oversold Threshold for pandas Series of close, high, and low data.
+# def calculate_ml_rsi_overbought(
+#         data_close: pd.Series,
+#         rsi_length: int = 14,
+#         use_smoothing: bool = True,
+#         smoothing_length: int = 3,
+#         ma_type: str = "ALMA",
+#         alma_sigma: int = 4,
+#         use_knn: bool = True,
+#         knn_lookback: int = 100,
+#         feature_count: int = 3) -> pd.Series:
+#     """
+#     Calculate Machine Learning-enhanced RSI Overbought Threshold for pandas Series of close, high, and low data.
 
-    Args:
-        data_close (pd.Series): Input pandas Series with close price data
-        data_high (pd.Series): Input pandas Series with high price data
-        data_low (pd.Series): Input pandas Series with low price data
-        rsi_length (int): Period for RSI calculation (default: 14)
-        use_smoothing (bool): Apply moving average to RSI (default: True)
-        smoothing_length (int): Period for moving average (default: 3)
-        ma_type (str): Moving average type (default: "ALMA")
-        alma_sigma (int): Sigma for ALMA (default: 4)
-        use_knn (bool): Enable KNN machine learning (default: True)
-        knn_neighbors (int): Number of KNN neighbors (default: 5)
-        knn_lookback (int): Historical period for KNN (default: 100)
-        knn_weight (float): Weight of KNN vs standard RSI (default: 0.4)
-        feature_count (int): Number of features for KNN (default: 3)
+#     Args:
+#         data_close (pd.Series): Input pandas Series with close price data
+#         data_high (pd.Series): Input pandas Series with high price data
+#         data_low (pd.Series): Input pandas Series with low price data
+#         rsi_length (int): Period for RSI calculation (default: 14)
+#         use_smoothing (bool): Apply moving average to RSI (default: True)
+#         smoothing_length (int): Period for moving average (default: 3)
+#         ma_type (str): Moving average type (default: "ALMA")
+#         alma_sigma (int): Sigma for ALMA (default: 4)
+#         use_knn (bool): Enable KNN machine learning (default: True)
+#         knn_neighbors (int): Number of KNN neighbors (default: 5)
+#         knn_lookback (int): Historical period for KNN (default: 100)
+#         knn_weight (float): Weight of KNN vs standard RSI (default: 0.4)
+#         feature_count (int): Number of features for KNN (default: 3)
 
-    Returns:
-        pd.Series: Series containing oversold threshold values
-    """
-    def calc_moving_average(src, length, ma_type, sigma):
-        if ma_type == "SMA":
-            return src.rolling(window=length).mean()
-        elif ma_type == "EMA":
-            return src.ewm(span=length, adjust=False).mean()
-        elif ma_type == "DEMA":
-            e1 = src.ewm(span=length, adjust=False).mean()
-            e2 = e1.ewm(span=length, adjust=False).mean()
-            return 2 * e1 - e2
-        elif ma_type == "TEMA":
-            e1 = src.ewm(span=length, adjust=False).mean()
-            e2 = e1.ewm(span=length, adjust=False).mean()
-            e3 = e2.ewm(span=length, adjust=False).mean()
-            return 3 * (e1 - e2) + e3
-        elif ma_type == "WMA":
-            weights = np.arange(1, length + 1)
-            return src.rolling(
-                window=length).apply(
-                lambda x: np.dot(
-                    x,
-                    weights) /
-                weights.sum(),
-                raw=True)
-        elif ma_type == "SMMA":
-            return src.ewm(alpha=1 / length, adjust=False).mean()
-        elif ma_type == "HMA":
-            wma1 = src.rolling(
-                window=length //
-                2).apply(
-                lambda x: np.dot(
-                    x,
-                    np.arange(
-                        1,
-                        length //
-                        2 +
-                        1)) /
-                np.sum(
-                    np.arange(
-                        1,
-                        length //
-                        2 +
-                        1)),
-                raw=True)
-            wma2 = src.rolling(
-                window=length).apply(
-                lambda x: np.dot(
-                    x,
-                    np.arange(
-                        1,
-                        length +
-                        1)) /
-                np.sum(
-                    np.arange(
-                        1,
-                        length +
-                        1)),
-                raw=True)
-            diff = 2 * wma1 - wma2
-            return diff.rolling(window=int(np.sqrt(length))).apply(lambda x: np.dot(x, np.arange(
-                1, int(np.sqrt(length)) + 1)) / np.sum(np.arange(1, int(np.sqrt(length)) + 1)), raw=True)
-        elif ma_type == "LSMA":
-            return src.rolling(window=length).apply(lambda x: np.polyfit(np.arange(length), x, 1)[
-                1] + np.polyfit(np.arange(length), x, 1)[0] * (length - 1), raw=True)
-        elif ma_type == "ALMA":
-            m = np.floor(0.85 * (length - 1))
-            s = length / sigma
-            w = np.exp(-((np.arange(length) - m) ** 2) / (2 * s ** 2))
-            w = w / w.sum()
-            return src.rolling(
-                window=length).apply(
-                lambda x: np.dot(
-                    x,
-                    w),
-                raw=True)
-        return src
+#     Returns:
+#         pd.Series: Series containing overbought threshold values
+#     """
+#     def calc_moving_average(src, length, ma_type, sigma):
+#         if ma_type == "SMA":
+#             return src.rolling(window=length).mean()
+#         elif ma_type == "EMA":
+#             return src.ewm(span=length, adjust=False).mean()
+#         elif ma_type == "DEMA":
+#             e1 = src.ewm(span=length, adjust=False).mean()
+#             e2 = e1.ewm(span=length, adjust=False).mean()
+#             return 2 * e1 - e2
+#         elif ma_type == "TEMA":
+#             e1 = src.ewm(span=length, adjust=False).mean()
+#             e2 = e1.ewm(span=length, adjust=False).mean()
+#             e3 = e2.ewm(span=length, adjust=False).mean()
+#             return 3 * (e1 - e2) + e3
+#         elif ma_type == "WMA":
+#             weights = np.arange(1, length + 1)
+#             return src.rolling(
+#                 window=length).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     weights) /
+#                 weights.sum(),
+#                 raw=True)
+#         elif ma_type == "SMMA":
+#             return src.ewm(alpha=1 / length, adjust=False).mean()
+#         elif ma_type == "HMA":
+#             wma1 = src.rolling(
+#                 window=length //
+#                 2).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     np.arange(
+#                         1,
+#                         length //
+#                         2 +
+#                         1)) /
+#                 np.sum(
+#                     np.arange(
+#                         1,
+#                         length //
+#                         2 +
+#                         1)),
+#                 raw=True)
+#             wma2 = src.rolling(
+#                 window=length).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     np.arange(
+#                         1,
+#                         length +
+#                         1)) /
+#                 np.sum(
+#                     np.arange(
+#                         1,
+#                         length +
+#                         1)),
+#                 raw=True)
+#             diff = 2 * wma1 - wma2
+#             return diff.rolling(window=int(np.sqrt(length))).apply(lambda x: np.dot(x, np.arange(
+#                 1, int(np.sqrt(length)) + 1)) / np.sum(np.arange(1, int(np.sqrt(length)) + 1)), raw=True)
+#         elif ma_type == "LSMA":
+#             return src.rolling(window=length).apply(lambda x: np.polyfit(np.arange(length), x, 1)[
+#                 1] + np.polyfit(np.arange(length), x, 1)[0] * (length - 1), raw=True)
+#         elif ma_type == "ALMA":
+#             m = np.floor(0.85 * (length - 1))
+#             s = length / sigma
+#             w = np.exp(-((np.arange(length) - m) ** 2) / (2 * s ** 2))
+#             w = w / w.sum()
+#             return src.rolling(
+#                 window=length).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     w),
+#                 raw=True)
+#         return src
 
-    def get_momentum(src, length):
-        return src - src.shift(length)
+#     def get_momentum(src, length):
+#         return src - src.shift(length)
 
-    def get_volatility(src, length):
-        return src.rolling(window=length).std()
+#     def get_volatility(src, length):
+#         return src.rolling(window=length).std()
 
-    def get_slope(src, length):
-        return src.rolling(
-            window=length).apply(
-            lambda x: np.polyfit(
-                np.arange(length),
-                x,
-                1)[0],
-            raw=True)
+#     def get_slope(src, length):
+#         return src.rolling(
+#             window=length).apply(
+#             lambda x: np.polyfit(
+#                 np.arange(length),
+#                 x,
+#                 1)[0],
+#             raw=True)
 
-    def normalize(src, length):
-        max_val = src.rolling(window=length).max()
-        min_val = src.rolling(window=length).min()
-        value_range = max_val - min_val
-        return (src - min_val) / value_range.where(value_range != 0, 1)
+#     def normalize(src, length):
+#         max_val = src.rolling(window=length).max()
+#         min_val = src.rolling(window=length).min()
+#         value_range = max_val - min_val
+#         return (src - min_val) / value_range.where(value_range != 0, 1)
 
-    def euclidean_distance(v1, v2):
-        return np.sqrt(np.sum((v1 - v2) ** 2))
+#     def euclidean_distance(v1, v2):
+#         return np.sqrt(np.sum((v1 - v2) ** 2))
 
-    delta = data_close.diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window=rsi_length).mean()
-    avg_loss = loss.rolling(window=rsi_length).mean()
-    rs = avg_gain / avg_loss.where(avg_loss != 0, 1)
-    base_rsi = 100 - (100 / (1 + rs))
-    smoothed_rsi = calc_moving_average(
-        base_rsi,
-        smoothing_length,
-        ma_type,
-        alma_sigma) if use_smoothing else base_rsi
-    standard_rsi = smoothed_rsi
+#     delta = data_close.diff()
+#     gain = delta.where(delta > 0, 0)
+#     loss = -delta.where(delta < 0, 0)
+#     avg_gain = gain.rolling(window=rsi_length).mean()
+#     avg_loss = loss.rolling(window=rsi_length).mean()
+#     rs = avg_gain / avg_loss.where(avg_loss != 0, 1)
+#     base_rsi = 100 - (100 / (1 + rs))
+#     smoothed_rsi = calc_moving_average(
+#         base_rsi,
+#         smoothing_length,
+#         ma_type,
+#         alma_sigma) if use_smoothing else base_rsi
+#     standard_rsi = smoothed_rsi
 
-    oversold = pd.Series(30.0, index=data_close.index)
-    if use_knn:
-        for i in range(knn_lookback, len(data_close)):
-            current_features = []
-            current_features.append(
-                normalize(
-                    standard_rsi,
-                    knn_lookback).iloc[i])
-            if feature_count >= 2:
-                current_features.append(
-                    normalize(
-                        get_momentum(
-                            standard_rsi,
-                            3),
-                        knn_lookback).iloc[i])
-            if feature_count >= 3:
-                current_features.append(
-                    normalize(
-                        get_volatility(
-                            standard_rsi,
-                            10),
-                        knn_lookback).iloc[i])
-            if feature_count >= 4:
-                current_features.append(
-                    normalize(
-                        get_slope(
-                            standard_rsi,
-                            5),
-                        knn_lookback).iloc[i])
-            if feature_count >= 5:
-                current_features.append(
-                    normalize(
-                        get_momentum(
-                            data_close,
-                            5),
-                        knn_lookback).iloc[i])
-            current_features = np.array(current_features)
+#     overbought = pd.Series(70.0, index=data_close.index)
+#     if use_knn:
+#         for i in range(knn_lookback, len(data_close)):
+#             current_features = []
+#             current_features.append(
+#                 normalize(
+#                     standard_rsi,
+#                     knn_lookback).iloc[i])
+#             if feature_count >= 2:
+#                 current_features.append(
+#                     normalize(
+#                         get_momentum(
+#                             standard_rsi,
+#                             3),
+#                         knn_lookback).iloc[i])
+#             if feature_count >= 3:
+#                 current_features.append(
+#                     normalize(
+#                         get_volatility(
+#                             standard_rsi,
+#                             10),
+#                         knn_lookback).iloc[i])
+#             if feature_count >= 4:
+#                 current_features.append(
+#                     normalize(
+#                         get_slope(
+#                             standard_rsi,
+#                             5),
+#                         knn_lookback).iloc[i])
+#             if feature_count >= 5:
+#                 current_features.append(
+#                     normalize(
+#                         get_momentum(
+#                             data_close,
+#                             5),
+#                         knn_lookback).iloc[i])
+#             current_features = np.array(current_features)
 
-            distances = []
-            indices = []
-            oversold_candidates = []
-            for j in range(1, knn_lookback + 1):
-                if i - j >= 0:
-                    historical_features = []
-                    historical_features.append(
-                        normalize(standard_rsi, knn_lookback).iloc[i - j])
-                    if feature_count >= 2:
-                        historical_features.append(normalize(get_momentum(
-                            standard_rsi, 3), knn_lookback).iloc[i - j])
-                    if feature_count >= 3:
-                        historical_features.append(normalize(get_volatility(
-                            standard_rsi, 10), knn_lookback).iloc[i - j])
-                    if feature_count >= 4:
-                        historical_features.append(normalize(get_slope(
-                            standard_rsi, 5), knn_lookback).iloc[i - j])
-                    if feature_count >= 5:
-                        historical_features.append(normalize(
-                            get_momentum(data_close, 5), knn_lookback).iloc[i - j])
-                    historical_features = np.array(historical_features)
-                    if len(historical_features) == len(current_features):
-                        dist = euclidean_distance(
-                            current_features, historical_features)
-                        distances.append(dist)
-                        indices.append(i - j)
-                        if i - j + 5 < len(data_close) and not np.isnan(
-                                data_close.iloc[i - j + 5]) and not np.isnan(data_close.iloc[i - j]):
-                            future_return = data_close.iloc[i -
-                                                            j + 5] - data_close.iloc[i - j]
-                            if future_return < data_close.iloc[i - j] * -0.02:
-                                oversold_candidates.append(
-                                    standard_rsi.iloc[i - j])
+#             distances = []
+#             indices = []
+#             overbought_candidates = []
+#             for j in range(1, knn_lookback + 1):
+#                 if i - j >= 0:
+#                     historical_features = []
+#                     historical_features.append(
+#                         normalize(standard_rsi, knn_lookback).iloc[i - j])
+#                     if feature_count >= 2:
+#                         historical_features.append(normalize(get_momentum(
+#                             standard_rsi, 3), knn_lookback).iloc[i - j])
+#                     if feature_count >= 3:
+#                         historical_features.append(normalize(get_volatility(
+#                             standard_rsi, 10), knn_lookback).iloc[i - j])
+#                     if feature_count >= 4:
+#                         historical_features.append(normalize(get_slope(
+#                             standard_rsi, 5), knn_lookback).iloc[i - j])
+#                     if feature_count >= 5:
+#                         historical_features.append(normalize(
+#                             get_momentum(data_close, 5), knn_lookback).iloc[i - j])
+#                     historical_features = np.array(historical_features)
+#                     if len(historical_features) == len(current_features):
+#                         dist = euclidean_distance(
+#                             current_features, historical_features)
+#                         distances.append(dist)
+#                         indices.append(i - j)
+#                         if i - j + 5 < len(data_close) and not np.isnan(
+#                                 data_close.iloc[i - j + 5]) and not np.isnan(data_close.iloc[i - j]):
+#                             future_return = data_close.iloc[i -
+#                                                             j + 5] - data_close.iloc[i - j]
+#                             if future_return > data_close.iloc[i - j] * 0.02:
+#                                 overbought_candidates.append(
+#                                     standard_rsi.iloc[i - j])
 
-            if oversold_candidates:
-                oversold.iloc[i] = np.mean(oversold_candidates)
+#             if overbought_candidates:
+#                 overbought.iloc[i] = np.mean(overbought_candidates)
 
-    return oversold
+#     return overbought
+
+
+# def calculate_ml_rsi_oversold(
+#         data_close: pd.Series,
+#         rsi_length: int = 14,
+#         use_smoothing: bool = True,
+#         smoothing_length: int = 3,
+#         ma_type: str = "ALMA",
+#         alma_sigma: int = 4,
+#         use_knn: bool = True,
+#         knn_lookback: int = 100,
+#         feature_count: int = 3) -> pd.Series:
+#     """
+#     Calculate Machine Learning-enhanced RSI Oversold Threshold for pandas Series of close, high, and low data.
+
+#     Args:
+#         data_close (pd.Series): Input pandas Series with close price data
+#         data_high (pd.Series): Input pandas Series with high price data
+#         data_low (pd.Series): Input pandas Series with low price data
+#         rsi_length (int): Period for RSI calculation (default: 14)
+#         use_smoothing (bool): Apply moving average to RSI (default: True)
+#         smoothing_length (int): Period for moving average (default: 3)
+#         ma_type (str): Moving average type (default: "ALMA")
+#         alma_sigma (int): Sigma for ALMA (default: 4)
+#         use_knn (bool): Enable KNN machine learning (default: True)
+#         knn_neighbors (int): Number of KNN neighbors (default: 5)
+#         knn_lookback (int): Historical period for KNN (default: 100)
+#         knn_weight (float): Weight of KNN vs standard RSI (default: 0.4)
+#         feature_count (int): Number of features for KNN (default: 3)
+
+#     Returns:
+#         pd.Series: Series containing oversold threshold values
+#     """
+#     def calc_moving_average(src, length, ma_type, sigma):
+#         if ma_type == "SMA":
+#             return src.rolling(window=length).mean()
+#         elif ma_type == "EMA":
+#             return src.ewm(span=length, adjust=False).mean()
+#         elif ma_type == "DEMA":
+#             e1 = src.ewm(span=length, adjust=False).mean()
+#             e2 = e1.ewm(span=length, adjust=False).mean()
+#             return 2 * e1 - e2
+#         elif ma_type == "TEMA":
+#             e1 = src.ewm(span=length, adjust=False).mean()
+#             e2 = e1.ewm(span=length, adjust=False).mean()
+#             e3 = e2.ewm(span=length, adjust=False).mean()
+#             return 3 * (e1 - e2) + e3
+#         elif ma_type == "WMA":
+#             weights = np.arange(1, length + 1)
+#             return src.rolling(
+#                 window=length).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     weights) /
+#                 weights.sum(),
+#                 raw=True)
+#         elif ma_type == "SMMA":
+#             return src.ewm(alpha=1 / length, adjust=False).mean()
+#         elif ma_type == "HMA":
+#             wma1 = src.rolling(
+#                 window=length //
+#                 2).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     np.arange(
+#                         1,
+#                         length //
+#                         2 +
+#                         1)) /
+#                 np.sum(
+#                     np.arange(
+#                         1,
+#                         length //
+#                         2 +
+#                         1)),
+#                 raw=True)
+#             wma2 = src.rolling(
+#                 window=length).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     np.arange(
+#                         1,
+#                         length +
+#                         1)) /
+#                 np.sum(
+#                     np.arange(
+#                         1,
+#                         length +
+#                         1)),
+#                 raw=True)
+#             diff = 2 * wma1 - wma2
+#             return diff.rolling(window=int(np.sqrt(length))).apply(lambda x: np.dot(x, np.arange(
+#                 1, int(np.sqrt(length)) + 1)) / np.sum(np.arange(1, int(np.sqrt(length)) + 1)), raw=True)
+#         elif ma_type == "LSMA":
+#             return src.rolling(window=length).apply(lambda x: np.polyfit(np.arange(length), x, 1)[
+#                 1] + np.polyfit(np.arange(length), x, 1)[0] * (length - 1), raw=True)
+#         elif ma_type == "ALMA":
+#             m = np.floor(0.85 * (length - 1))
+#             s = length / sigma
+#             w = np.exp(-((np.arange(length) - m) ** 2) / (2 * s ** 2))
+#             w = w / w.sum()
+#             return src.rolling(
+#                 window=length).apply(
+#                 lambda x: np.dot(
+#                     x,
+#                     w),
+#                 raw=True)
+#         return src
+
+#     def get_momentum(src, length):
+#         return src - src.shift(length)
+
+#     def get_volatility(src, length):
+#         return src.rolling(window=length).std()
+
+#     def get_slope(src, length):
+#         return src.rolling(
+#             window=length).apply(
+#             lambda x: np.polyfit(
+#                 np.arange(length),
+#                 x,
+#                 1)[0],
+#             raw=True)
+
+#     def normalize(src, length):
+#         max_val = src.rolling(window=length).max()
+#         min_val = src.rolling(window=length).min()
+#         value_range = max_val - min_val
+#         return (src - min_val) / value_range.where(value_range != 0, 1)
+
+#     def euclidean_distance(v1, v2):
+#         return np.sqrt(np.sum((v1 - v2) ** 2))
+
+#     delta = data_close.diff()
+#     gain = delta.where(delta > 0, 0)
+#     loss = -delta.where(delta < 0, 0)
+#     avg_gain = gain.rolling(window=rsi_length).mean()
+#     avg_loss = loss.rolling(window=rsi_length).mean()
+#     rs = avg_gain / avg_loss.where(avg_loss != 0, 1)
+#     base_rsi = 100 - (100 / (1 + rs))
+#     smoothed_rsi = calc_moving_average(
+#         base_rsi,
+#         smoothing_length,
+#         ma_type,
+#         alma_sigma) if use_smoothing else base_rsi
+#     standard_rsi = smoothed_rsi
+
+#     oversold = pd.Series(30.0, index=data_close.index)
+#     if use_knn:
+#         for i in range(knn_lookback, len(data_close)):
+#             current_features = []
+#             current_features.append(
+#                 normalize(
+#                     standard_rsi,
+#                     knn_lookback).iloc[i])
+#             if feature_count >= 2:
+#                 current_features.append(
+#                     normalize(
+#                         get_momentum(
+#                             standard_rsi,
+#                             3),
+#                         knn_lookback).iloc[i])
+#             if feature_count >= 3:
+#                 current_features.append(
+#                     normalize(
+#                         get_volatility(
+#                             standard_rsi,
+#                             10),
+#                         knn_lookback).iloc[i])
+#             if feature_count >= 4:
+#                 current_features.append(
+#                     normalize(
+#                         get_slope(
+#                             standard_rsi,
+#                             5),
+#                         knn_lookback).iloc[i])
+#             if feature_count >= 5:
+#                 current_features.append(
+#                     normalize(
+#                         get_momentum(
+#                             data_close,
+#                             5),
+#                         knn_lookback).iloc[i])
+#             current_features = np.array(current_features)
+
+#             distances = []
+#             indices = []
+#             oversold_candidates = []
+#             for j in range(1, knn_lookback + 1):
+#                 if i - j >= 0:
+#                     historical_features = []
+#                     historical_features.append(
+#                         normalize(standard_rsi, knn_lookback).iloc[i - j])
+#                     if feature_count >= 2:
+#                         historical_features.append(normalize(get_momentum(
+#                             standard_rsi, 3), knn_lookback).iloc[i - j])
+#                     if feature_count >= 3:
+#                         historical_features.append(normalize(get_volatility(
+#                             standard_rsi, 10), knn_lookback).iloc[i - j])
+#                     if feature_count >= 4:
+#                         historical_features.append(normalize(get_slope(
+#                             standard_rsi, 5), knn_lookback).iloc[i - j])
+#                     if feature_count >= 5:
+#                         historical_features.append(normalize(
+#                             get_momentum(data_close, 5), knn_lookback).iloc[i - j])
+#                     historical_features = np.array(historical_features)
+#                     if len(historical_features) == len(current_features):
+#                         dist = euclidean_distance(
+#                             current_features, historical_features)
+#                         distances.append(dist)
+#                         indices.append(i - j)
+#                         if i - j + 5 < len(data_close) and not np.isnan(
+#                                 data_close.iloc[i - j + 5]) and not np.isnan(data_close.iloc[i - j]):
+#                             future_return = data_close.iloc[i -
+#                                                             j + 5] - data_close.iloc[i - j]
+#                             if future_return < data_close.iloc[i - j] * -0.02:
+#                                 oversold_candidates.append(
+#                                     standard_rsi.iloc[i - j])
+
+#             if oversold_candidates:
+#                 oversold.iloc[i] = np.mean(oversold_candidates)
+
+#     return oversold
 
 
 def calculate_zigzag(
@@ -5190,10 +5190,10 @@ series_ts_extraction_fns = [
     calculate_dma,
     calculate_dema,
     calculate_vidya,
-    calculate_vma,
+    # calculate_vma,
     calculate_rsi,
     calculate_roc,
-    calculate_momentum,  # Single Series version
+    calculate_momentum_s,
     calculate_stochastic_rsi_k,
     calculate_stochastic_rsi_d,
     calculate_ppo,
@@ -5202,7 +5202,7 @@ series_ts_extraction_fns = [
     calculate_trix,
     calculate_rmi,
     calculate_pmo,
-    calculate_coppock,  # Based on signature
+    calculate_coppock,  
     calculate_tii,
     calculate_dpo,
     calculate_regression_slope,
@@ -5215,13 +5215,13 @@ series_ts_extraction_fns = [
     calculate_bear_power,
     calculate_chikou_span,
     calculate_keltner_middle,
-    calculate_donchian_upper,  # Single Series version
-    calculate_donchian_lower,  # Single Series version
+    calculate_donchian_upper_s,  
+    calculate_donchian_lower_s,  
     calculate_iv_rank,
     calculate_iv_percentile,
-    calculate_ml_rsi,
-    calculate_ml_rsi_overbought,
-    calculate_ml_rsi_oversold,
+    # calculate_ml_rsi,
+    # calculate_ml_rsi_overbought,
+    # calculate_ml_rsi_oversold,
     hurst_exponent,
     calculate_iqr,
     calculate_cv,
@@ -5229,8 +5229,8 @@ series_ts_extraction_fns = [
     calculate_z_score,
     calculate_acceleration,
     calculate_nth_autocorrelation_series,
-    calculate_cusum_positive,
-    calculate_cusum_negative,
+    # calculate_cusum_positive,
+    # calculate_cusum_negative,
     calculate_tsi,
     calculate_kst,
     adx_proxy_from_typical_price,
@@ -5323,7 +5323,7 @@ ohlc_ts_extraction_fns = [
     calculate_short_rci,
     calculate_middle_rci,
     calculate_long_rci,
-    calculate_momentum,  # Multiple Series version
+    calculate_momentum,
     calculate_median,
     calculate_upper_band,
     calculate_lower_band,
@@ -5335,8 +5335,8 @@ ohlc_ts_extraction_fns = [
     calculate_envelope_basis,
     calculate_envelope_upper,
     calculate_envelope_lower,
-    calculate_donchian_upper,  # Multiple Series version
-    calculate_donchian_lower,  # Multiple Series version
+    calculate_donchian_upper,  
+    calculate_donchian_lower,  
     calculate_coppock_curve,
     calculate_connors_rsi,
     calculate_choppiness_index,
