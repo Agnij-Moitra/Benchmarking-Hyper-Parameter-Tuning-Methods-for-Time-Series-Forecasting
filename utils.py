@@ -1,8 +1,10 @@
 import pickle
 import pandas as pd
+from typing import Generator, Any
 
 
-def yield_data(pickle_file_path="./data/monash/monash-df.pkl"):
+def yield_data(
+        pickle_file_path="./data/monash/monash-df.pkl") -> Generator[dict[str, Any], Any, None]:
     """
     ## Generator function to yield objects one at a time from a pickle file.
 
@@ -35,7 +37,7 @@ def yield_data(pickle_file_path="./data/monash/monash-df.pkl"):
         raise pickle.UnpicklingError("Corrupted pickle file. Re-run setup.sh")
 
 
-def prepare_time_series(df, frequency):
+def prepare_time_series(df, frequency) -> Generator[pd.DataFrame, Any, None]:
     """
     ## Generator function to yield individual time series DataFrames from a DataFrame with series_value lists.
 
@@ -103,4 +105,3 @@ def prepare_time_series(df, frequency):
         except Exception as e:
             print(e)
             continue
-

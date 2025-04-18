@@ -1,9 +1,8 @@
-import os
-import multiprocessing as mp
+from joblib import Parallel, delayed
 from utils import yield_data, prepare_time_series
 
 
-def compute_nan_percent(series_df):
+def compute_nan_percent(series_df) -> float:
     """Compute % NaNs in a single univariate time-series DataFrame."""
     n_missing = series_df.isna().sum().sum()
     n_total = series_df.size
@@ -11,7 +10,6 @@ def compute_nan_percent(series_df):
 
 
 nan_percentages = {}
-cpu_count = os.cpu_count()
 i = 0
 for data in yield_data():
     series_list = list(prepare_time_series(data['df'], data['freq']))
@@ -23,8 +21,9 @@ for data in yield_data():
         i += 1
         continue
 
-    with mp.Pool(processes=cpu_count) as pool:
-        nan_percents = pool.map(compute_nan_percent, series_list)
+    nan_percents = Parallel(n_jobs=-1, backend='loky')(
+        delayed(compute_nan_percent)(series) for series in series_list
+    )
 
     avg_nan_percent = sum(nan_percents) / series_count
     nan_percentages[i] = avg_nan_percent
