@@ -113,12 +113,11 @@ WAVELETS = [
     'gaus1', 'gaus2', 'gaus3', 'gaus4', 'gaus5', 'gaus6', 'gaus7', 'gaus8',
     'mexh',
     'morl',
-    'cmor1.5-1.0',   
-    'shan1.5-1.0',  
-    'fbsp1-1.5-1.0', 
-    'paul4'
+    'cmor',   
+    'shan',  
+    'fbsp1', 
+    'cgau1', 'cgau2', 'cgau3', 'cgau4', 'cgau5', 'cgau6', 'cgau7', 'cgau8',
 ]
-
 
 def yield_data(pickle_file_path="./data/monash/monash-df.pkl") -> Generator[dict[str, Any], Any, None]:
     """
