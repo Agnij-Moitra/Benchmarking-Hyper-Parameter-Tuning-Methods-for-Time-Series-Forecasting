@@ -9,6 +9,7 @@ from pmdarima import auto_arima
 import tsfel
 import pywt
 from scipy import signal
+from joblib import Parallel, delayed
 from scipy.stats import rankdata
 from scipy.signal import find_peaks
 from statsmodels.tsa.stattools import pacf, acf
@@ -366,202 +367,284 @@ def infer_time_series_params(
     }
 
 
-def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
-    """
-    Automatically featurize a time series DataFrame with dynamically inferred parameters,
-    falling back to FREQ_CONFIG if inference fails.
+# ====================
+# Feature Extractors
+# ====================
 
-    Args:
-        df (pd.DataFrame): DataFrame with one column of values and timestamps as index.
-        frequency (str): Frequency of the series (e.g., '4_seconds', 'daily').
+def extract_datetime_features(series: pd.Series, config: dict) -> pd.DataFrame:
+    """Extract datetime-based features from series index."""
+    features = pd.DataFrame(index=series.index)
+    dt = series.index
+    
+    datetime_features = {
+        'second': dt.second,
+        'minute': dt.minute,
+        'hour': dt.hour,
+        'day_of_week': dt.dayofweek,
+        'week_of_year': dt.isocalendar().week.astype(int),
+        'half_hourly': (dt.hour * 2) + (dt.minute // 30),
+        'month': dt.month,
+        'quarter': dt.quarter,
+        'year': dt.year
+    }
+    
+    for name, values in datetime_features.items():
+        features[name] = values
+        
+    return features
 
-    Returns:
-        pd.DataFrame: DataFrame with extracted features.
-    """
-    if frequency not in FREQ_MAP:
-        raise ValueError(
-            f"Invalid frequency. Choose from {list(FREQ_MAP.keys())}")
-
-    if df.empty or len(df.columns) != 1:
-        raise ValueError(
-            "DataFrame must have exactly one value column and timestamps as index")
-
-    value_col = df.columns[0]
-    series = df[value_col].dropna()
-
-    # Infer parameters with fallback to FREQ_CONFIG
-    config = infer_time_series_params(series, frequency)
-
-    # 1. Basic Datetime Features
-    datetime_features = [
-        ('second', df.index.second),
-        ('minute', df.index.minute),
-        ('hour', df.index.hour),
-        ('day_of_week', df.index.dayofweek),
-        ('week_of_year', df.index.isocalendar().week.astype(int)),
-        ('half_hourly', (df.index.hour * 2) + (df.index.minute // 30)),
-        ('month', df.index.month),
-        ('quarter', df.index.quarter),
-        ('year', df.index.year)
-    ]
-    for name, values in datetime_features:
-        df[name] = values
-
-    # 2. Lag Features
+def extract_lag_features(series: pd.Series, config: dict) -> pd.DataFrame:
+    """Generate lag features using config['lags']."""
+    features = pd.DataFrame(index=series.index)
     for lag in config['lags']:
-        df[f'lag_{lag}'] = df[value_col].shift(lag)
+        try:
+            features[f'lag_{lag}'] = series.shift(lag)
+        except Exception as e:
+            print(f"Error creating lag {lag}: {str(e)}")
+    return features
 
-    # 3. Rolling Window Statistics
-    threshold = df[value_col].mean()
+def extract_rolling_features(series: pd.Series, config: dict) -> pd.DataFrame:
+    """Calculate rolling window statistics."""
+    features = pd.DataFrame(index=series.index)
+    threshold = series.mean()
+    
     for w in config['rolling_windows']:
-        roll = df[value_col].rolling(window=w)
+        try:
+            window = series.rolling(window=w)
+            
+            # Basic statistics
+            features[f'rolling_mean_{w}'] = window.mean()
+            features[f'rolling_std_{w}'] = window.std()
+            features[f'rolling_min_{w}'] = window.min()
+            features[f'rolling_max_{w}'] = window.max()
+            
+            # Quantiles
+            q25 = window.quantile(0.25)
+            q75 = window.quantile(0.75)
+            features[f'rolling_quantile_25_{w}'] = q25
+            features[f'rolling_quantile_75_{w}'] = q75
+            features[f'rolling_iqr_{w}'] = q75 - q25
+            
+            # Other metrics
+            features[f'rolling_median_{w}'] = window.median()
+            features[f'rolling_sum_{w}'] = window.sum()
+            features[f'rolling_skew_{w}'] = window.skew()
+            features[f'rolling_kurtosis_{w}'] = window.kurt()
+            
+            # Difference features
+            features[f'rolling_diff_{w}'] = series - series.shift(w)
+            features[f'rolling_pct_change_{w}'] = series.pct_change(periods=w)
+            
+            # Boolean counts
+            features[f'rolling_count_above_mean_{w}'] = (
+                (series > threshold).rolling(window=w).sum()
+            )
+            # Dispersion metrics
+            features[f'rolling_cv_{w}'] = features[f'rolling_std_{w}'] / features[f'rolling_mean_{w}']
+            features[f'rolling_zscore_{w}'] = (
+                series - features[f'rolling_mean_{w}']) / features[f'rolling_std_{w}']
+                
+        except Exception as e:
+            print(f"Error creating rolling features for window {w}: {str(e)}")
+    
+    return features
 
-        # --- built‑in C/Cython routines ---
-        mean = roll.mean()
-        std = roll.std()
-        mn = roll.min()
-        mx = roll.max()
-        q25 = roll.quantile(0.25)
-        q75 = roll.quantile(0.75)
-        med = roll.median()
-        summ = roll.sum()
-        skew = roll.skew()
-        kurt = roll.kurt()
-
-        # assign them
-        df[f'rolling_mean_{w}'] = mean
-        df[f'rolling_std_{w}'] = std
-        df[f'rolling_min_{w}'] = mn
-        df[f'rolling_max_{w}'] = mx
-        df[f'rolling_quantile_25_{w}'] = q25
-        df[f'rolling_quantile_75_{w}'] = q75
-        df[f'rolling_iqr_{w}'] = q75 - q25
-        df[f'rolling_median_{w}'] = med
-        df[f'rolling_sum_{w}'] = summ
-        df[f'rolling_skew_{w}'] = skew
-        df[f'rolling_kurtosis_{w}'] = kurt
-
-        # --- direct vectorized differences / pct changes ---
-        df[f'rolling_diff_{w}'] = df[value_col] - df[value_col].shift(w)
-        df[f'rolling_pct_change_{w}'] = df[value_col].pct_change(periods=w)
-
-        # --- boolean count above mean via rolling sum of mask ---
-        df[f'rolling_count_above_mean_{w}'] = (
-            (df[value_col] > threshold).astype(int)
-        ).rolling(window=w).sum()
-
-        # --- dispersion & z‑score (vector ops) ---
-        df[f'rolling_cv_{w}'] = std / mean
-        df[f'rolling_zscore_{w}'] = (df[value_col] - mean) / std
-
-    # 4. Seasonal Decomposition
+def extract_seasonal_features(series: pd.Series, config: dict) -> pd.DataFrame:
+    """Perform seasonal decomposition."""
+    features = pd.DataFrame(index=series.index)
+    clean_series = series.dropna()
+    
     try:
+        # Additive decomposition
         decomposition = seasonal_decompose(
-            series, model='additive', period=config['seasonal_period']
+            clean_series, model='additive', period=config['seasonal_period']
         )
-        df['trend_add'] = decomposition.trend
-        df['seasonal_add'] = decomposition.seasonal
-        df['residual_add'] = decomposition.resid
+        features['trend_add'] = decomposition.trend
+        features['seasonal_add'] = decomposition.seasonal
+        features['residual_add'] = decomposition.resid
+        
+        # Multiplicative decomposition
         decomposition = seasonal_decompose(
-            series, model='multiplicative', period=config['seasonal_period']
+            clean_series, model='multiplicative', period=config['seasonal_period']
         )
-        df['trend_mul'] = decomposition.trend
-        df['seasonal_mul'] = decomposition.seasonal
-        df['residual_mul'] = decomposition.resid
+        features['trend_mul'] = decomposition.trend
+        features['seasonal_mul'] = decomposition.seasonal
+        features['residual_mul'] = decomposition.resid
+        
     except Exception as e:
-        print(f"Seasonal decomposition failed: {e}")
+        print(f"Seasonal decomposition failed: {str(e)}")
+    
+    return features.reindex(series.index)
 
-    # 5. Empirical Mode Decomposition (EMD)
+def extract_emd_features(series: pd.Series, config: dict) -> pd.DataFrame:
+    """Empirical Mode Decomposition features."""
+    features = pd.DataFrame(index=series.index)
+    
     try:
         emd = EMD()
         imfs = emd(series.values)
+        
         for i in range(imfs.shape[0]):
-            df[f'imf_{i+1}'] = np.nan
-            valid_length = min(len(imfs[i]), len(df))
-            df.iloc[-valid_length:,
-                    df.columns.get_loc(f'imf_{i+1}')] = imfs[i][-valid_length:]
+            features[f'imf_{i+1}'] = np.nan
+            valid_length = min(len(imfs[i]), len(features))
+            features.iloc[-valid_length:, features.columns.get_loc(f'imf_{i+1}')] = imfs[i][-valid_length:]
+            
     except Exception as e:
-        print(f"EMD failed: {e}")
+        print(f"EMD failed: {str(e)}")
+    
+    return features
 
-    # 6. Model Residuals (ARIMA)
+def extract_arima_features(series: pd.Series, config: dict) -> pd.DataFrame:
+    """ARIMA model residuals."""
+    features = pd.DataFrame(index=series.index)
+    
     try:
-        # ARIMA
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             model = auto_arima(
-                series,
+                series.dropna(),
                 seasonal=False,
                 suppress_warnings=True,
-                n_jobs=CPU_COUNT)
-            df['arima_residual'] = np.nan
-            valid_length = min(len(model.resid()), len(df))
-            df.iloc[-valid_length:,
-                    df.columns.get_loc('arima_residual')] = model.resid()[-valid_length:]
+                error_action='ignore',
+                n_jobs=CPU_COUNT,
+            )
+            features['arima_residual'] = np.nan
+            valid_length = min(len(model.resid()), len(features))
+            features.iloc[-valid_length:, 0] = model.resid()[-valid_length:]
+            
     except Exception as e:
-        print(f"ARIMA failed: {e}")
+        print(f"ARIMA failed: {str(e)}")
+    
+    return features
 
-    # 7. TSFEL Features
+def extract_tsfel_features(series: pd.Series, config: dict) -> pd.DataFrame:
+    """TSFEL features."""
+    features = pd.DataFrame(index=series.index)
+    
     try:
         cfg = tsfel.get_features_by_domain()
         tsfel_features = tsfel.time_series_features_extractor(
-            cfg, df[value_col], window_size=config['tsfel_window'],
-            overlap=0.5, n_jobs=CPU_COUNT
+            cfg, series,
+            window_size=config['tsfel_window'],
+            overlap=0.5,
+            n_jobs=CPU_COUNT  # Already parallelized at higher level
         )
-        df = df.join(tsfel_features.add_prefix('tsfel_'))
+        features = tsfel_features.add_prefix('tsfel_').reindex(series.index)
+        
     except Exception as e:
-        print(f"TSFEL failed: {e}")
+        print(f"TSFEL failed: {str(e)}")
+    
+    return features
 
-    # 8. FFT Features
+def extract_fft_features(series: pd.Series, config: dict) -> pd.DataFrame:
+    """FFT features."""
+    features = pd.DataFrame(index=series.index)
+    window_size = config['fft_window']
+    
     try:
-        window_size = config['fft_window']
         fft_features = []
-        for i in range(len(df) - window_size + 1):
-            window = df[value_col].iloc[i:i + window_size]
+        for i in range(len(series) - window_size + 1):
+            window = series.iloc[i:i + window_size]
             fft = np.fft.fft(window)
             amplitudes = np.abs(fft)
             fft_features.append({
                 'fft_peak_freq': np.argmax(amplitudes[1:window_size // 2]),
                 'fft_peak_amp': np.max(amplitudes[1:window_size // 2])
             })
-        fft_df = pd.DataFrame(fft_features, index=df.index[window_size - 1:])
-        df = df.join(fft_df)
+            
+        fft_df = pd.DataFrame(fft_features, index=series.index[window_size - 1:])
+        features = features.join(fft_df, how='outer')
+        
     except Exception as e:
-        print(f"FFT failed: {e}")
+        print(f"FFT failed: {str(e)}")
+    
+    return features
 
-    # 9. Wavelet Transform
+def extract_wavelet_features(series: pd.Series, config: dict) -> pd.DataFrame:
+    """Wavelet transform features."""
+    features = pd.DataFrame(index=series.index)
     scales = np.arange(1, 20)
+    
     for wavelet in WAVELETS:
         try:
             coeffs, _ = pywt.cwt(series.values, scales, wavelet, method='fft')
             for i in range(coeffs.shape[0]):
                 col_name = f'wavelet_{wavelet}_{i}'
-                # Take absolute value to convert complex to float
-                coeff_magnitude = np.abs(coeffs[i])
-                df[col_name] = np.nan
-                valid_length = min(len(coeff_magnitude), len(df))
-                df.iloc[-valid_length:,
-                        df.columns.get_loc(col_name)] = coeff_magnitude[-valid_length:]
-            print(f"Wavelet '{wavelet}' applied successfully.")
+                features[col_name] = np.nan
+                valid_length = min(len(coeffs[i]), len(features))
+                features.iloc[-valid_length:, features.columns.get_loc(col_name)] = \
+                    np.abs(coeffs[i][-valid_length:])
+                    
         except Exception as e:
-            print(f"Wavelet '{wavelet}' failed: {e}")
+            print(f"Wavelet '{wavelet}' failed: {str(e)}")
+    
+    return features
 
-    # 10. Microstructure-FFT Fusion
+def extract_micro_fft_features(series: pd.Series, config: dict) -> pd.DataFrame:
+    """Microstructure FFT features."""
+    features = pd.DataFrame(index=series.index)
+    micro_window = config['micro_window']
+    
     try:
-        micro_window = config['micro_window']
         micro_features = []
-        for i in range(len(df) - micro_window + 1):
-            window = df[value_col].iloc[i:i + micro_window]
+        for i in range(len(series) - micro_window + 1):
+            window = series.iloc[i:i + micro_window]
             fft = np.fft.fft(window)
             amplitudes = np.abs(fft)
             micro_features.append({
                 'micro_fft_peak': np.argmax(amplitudes[1:micro_window // 2]),
                 'micro_fft_amp': np.max(amplitudes[1:micro_window // 2])
             })
-        micro_df = pd.DataFrame(micro_features,
-                                index=df.index[micro_window - 1:])
-        df = df.join(micro_df)
+            
+        micro_df = pd.DataFrame(micro_features, index=series.index[micro_window - 1:])
+        features = features.join(micro_df, how='outer')
+        
     except Exception as e:
-        print(f"Microstructure FFT failed: {e}")
+        print(f"Micro FFT failed: {str(e)}")
+    
+    return features
 
+# ====================
+# Main Featurization
+# ====================
+
+def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
+    """
+    Parallelized feature extraction pipeline.
+    Returns DataFrame with original data and extracted features.
+    """
+    if frequency not in FREQ_MAP:
+        raise ValueError(f"Invalid frequency. Choose from {list(FREQ_MAP.keys())}")
+
+    if df.empty or len(df.columns) != 1:
+        raise ValueError("DataFrame must have exactly one value column")
+
+    value_col = df.columns[0]
+    series = df[value_col].dropna()
+    config = infer_time_series_params(series, frequency)
+
+    # List of feature extraction functions
+    feature_functions = [
+        extract_datetime_features,
+        extract_lag_features,
+        extract_rolling_features,
+        extract_seasonal_features,
+        extract_emd_features,
+        extract_arima_features,
+        extract_tsfel_features,
+        extract_fft_features,
+        extract_wavelet_features,
+        extract_micro_fft_features,
+    ]
+
+    # Execute all feature extractors in parallel
+    features_list = Parallel(n_jobs=CPU_COUNT, prefer='processes', backend='loky')(
+        delayed(func)(series, config) for func in feature_functions
+    )
+
+    # Combine all features with original data
+    for feature_df in features_list:
+        df = df.join(feature_df, how='left')
+
+    # Final cleaning
     return df.ffill().bfill().dropna(how='all', axis=1)
-
