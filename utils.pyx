@@ -1,7 +1,24 @@
+# cython: language_level=3
+# cython: boundscheck=False
+# cython: wraparound=False
+# cython: nonecheck=False
+# cython: initializedcheck=False
+# cython: cdivision=True
+# cython: infer_types=True
+# cython: profile=False
+# cython: binding=False
+# cython: optimize.unpack_method_calls=True
+# cython: optimize.use_switch=True
+# cython: embedsignature=False
+# cython: overflowcheck=False  
+# cython: autotestdict=False  
+# cython: linetrace=False  
+
 import pickle
 import pandas as pd
 from typing import Generator, Any
 import numpy as np
+cimport numpy as np
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import acf
 from PyEMD import EMD
@@ -638,7 +655,7 @@ def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
     ]
 
     # Execute all feature extractors in parallel
-    features_list = Parallel(n_jobs=CPU_COUNT, prefer='processes', backend='loky')(
+    features_list = Parallel(n_jobs=CPU_COUNT, prefer='processes')(
         delayed(func)(series, config) for func in feature_functions
     )
 
