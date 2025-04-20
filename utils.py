@@ -5,6 +5,7 @@ from typing import Generator, Any
 import numpy as np
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import acf
+import gc
 from PyEMD import EMD
 from pmdarima import auto_arima
 import tsfel
@@ -635,7 +636,7 @@ def extract_tsfel_features(
         )
         features = tsfel_features.add_prefix('tsfel_').reindex(series.index)
 
-    except:
+    except BaseException:
         print(f"TSFEL failed, using default config")
         cfg = tsfel.get_features_by_domain()
         tsfel_features = tsfel.time_series_features_extractor(
@@ -671,7 +672,7 @@ def extract_fft_features(
                               index=series.index[window_size - 1:])
         features = features.join(fft_df, how='outer')
 
-    except:
+    except BaseException:
         print(f"FFT failed, using default config")
         window_size = FREQ_CONFIG[frequency]['fft_window']
         fft_features = []
@@ -804,6 +805,7 @@ def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
     # Final cleaning
     return df.ffill().bfill().dropna(how='all', axis=1)
 
+
 def process_single_series(ts_df, freq, dataset_name):
     """Process one time series and save to CSV"""
     try:
@@ -816,8 +818,13 @@ def process_single_series(ts_df, freq, dataset_name):
         print(f"Saved {series_name} to {file_path}")
         return True
     except Exception as e:
-        print(f"Error in {ts_df.columns[0]}: {e}")
+        print(
+            f"Error in {ts_df.columns[0] if not ts_df.empty else 'unknown series'}: {e}")
         return False
+    finally:
+        del featurized_df, ts_df
+        gc.collect()
+
 
 def process_dataset(data):
     """Process all series in a dataset"""
@@ -833,14 +840,17 @@ def process_dataset(data):
     except Exception as e:
         print(f"Error preparing {name}: {e}")
         return (name, None)
+    finally:
+        del df
+        gc.collect()
 
     filtered_series = []
     for i in all_series:
-        filename = f"{i.columns[0]}"
+        filename = f"{i.columns[0]}.csv"
         filepath = os.path.join(dataset_dir, filename)
         if not os.path.exists(filepath):
             filtered_series.append(i)
-    
+
     all_series = filtered_series
 
     if len(all_series) >= 50:
@@ -854,7 +864,10 @@ def process_dataset(data):
     success_count = sum(results)
     e = perf_counter()
     print(f"Finished {name} ({success_count}/{len(all_series)} succeeded)")
+    del all_series, results
+    gc.collect()
     return (name, (e - s) / 60)
+
 
 def process_time_series(pickle_path="./data/monash/monash-df.pkl"):
     """Orchestrate processing of all datasets"""
@@ -865,14 +878,18 @@ def process_time_series(pickle_path="./data/monash/monash-df.pkl"):
             if time_taken is not None:
                 time_per_df[name] = time_taken
         except Exception as e:
-            print(f"Error: {e}, skiping {data['name']}")
+            print(f"Error: {e}, skipping {data.get('name')}")
             continue
+        finally:
+            del data
+            gc.collect()
     return time_per_df
+
 
 def main():
     total_start = perf_counter()
-    time_per_df = process_time_series()  # Now properly defined
+    time_per_df = process_time_series()
     total_end = perf_counter()
-    
+
     print(f"\nTotal time: {(total_end - total_start)/60:.2f} mins")
     print("Per-dataset times:", time_per_df)
