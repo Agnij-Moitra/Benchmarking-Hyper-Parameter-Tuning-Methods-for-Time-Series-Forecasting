@@ -533,15 +533,17 @@ def extract_seasonal_features(
         features['seasonal_add'] = decomposition.seasonal
         features['residual_add'] = decomposition.resid
 
-        # Multiplicative decomposition
-        decomposition = seasonal_decompose(
-            clean_series,
-            model='multiplicative',
-            period=config['seasonal_period'])
-        features['trend_mul'] = decomposition.trend
-        features['seasonal_mul'] = decomposition.seasonal
-        features['residual_mul'] = decomposition.resid
-
+        try:
+            decomposition = seasonal_decompose(
+                clean_series,
+                model='multiplicative',
+                period=config['seasonal_period'])
+            features['trend_mul'] = decomposition.trend
+            features['seasonal_mul'] = decomposition.seasonal
+            features['residual_mul'] = decomposition.resid
+        except Exception as e:
+            print(f"Error in multiplicative seasonal decomposition: {e}.")
+            pass
     except Exception as e:
         print(f"Seasonal decomposition failed w/ infered period: {str(e)}")
         decomposition = seasonal_decompose(
@@ -551,15 +553,18 @@ def extract_seasonal_features(
         features['trend_add'] = decomposition.trend
         features['seasonal_add'] = decomposition.seasonal
         features['residual_add'] = decomposition.resid
-
-        # Multiplicative decomposition
-        decomposition = seasonal_decompose(
-            clean_series,
-            model='multiplicative',
-            period=FREQ_CONFIG[frequency]['seasonal_period'])
-        features['trend_mul'] = decomposition.trend
-        features['seasonal_mul'] = decomposition.seasonal
-        features['residual_mul'] = decomposition.resid
+        try:
+            # Multiplicative decomposition
+            decomposition = seasonal_decompose(
+                clean_series,
+                model='multiplicative',
+                period=FREQ_CONFIG[frequency]['seasonal_period'])
+            features['trend_mul'] = decomposition.trend
+            features['seasonal_mul'] = decomposition.seasonal
+            features['residual_mul'] = decomposition.resid
+        except Exception as e:
+            print(f"Error in multiplicative seasonal decomposition: {e}.")
+            pass
     return features.reindex(series.index)
 
 
@@ -820,7 +825,6 @@ def process_dataset(data):
     name, df, freq = data['name'], data['df'], data['freq']
     print(f"Starting dataset: {name}")
 
-    # Create dataset directory
     dataset_dir = os.path.join("./data/monash", name)
     os.makedirs(dataset_dir, exist_ok=True)
 
@@ -829,7 +833,16 @@ def process_dataset(data):
     except Exception as e:
         print(f"Error preparing {name}: {e}")
         return (name, None)
+
+    filtered_series = []
+    for i in all_series:
+        filename = f"{i.columns[0]}"
+        filepath = os.path.join(dataset_dir, filename)
+        if not os.path.exists(filepath):
+            filtered_series.append(i)
     
+    all_series = filtered_series
+
     if len(all_series) >= 50:
         all_series = random.sample(all_series, 50)
 
@@ -847,9 +860,13 @@ def process_time_series(pickle_path="./data/monash/monash-df.pkl"):
     """Orchestrate processing of all datasets"""
     time_per_df = {}
     for data in yield_data(pickle_path):
-        name, time_taken = process_dataset(data)
-        if time_taken is not None:
-            time_per_df[name] = time_taken
+        try:
+            name, time_taken = process_dataset(data)
+            if time_taken is not None:
+                time_per_df[name] = time_taken
+        except Exception as e:
+            print(f"Error: {e}, skiping {data['name']}")
+            continue
     return time_per_df
 
 def main():
@@ -859,6 +876,3 @@ def main():
     
     print(f"\nTotal time: {(total_end - total_start)/60:.2f} mins")
     print("Per-dataset times:", time_per_df)
-
-# if __name__ == "__main__":
-#     main()
