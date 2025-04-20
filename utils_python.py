@@ -18,7 +18,7 @@ import pickle
 import pandas as pd
 from typing import Generator, Any
 import numpy as np
-cimport numpy as np
+# cimport numpy as np
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import acf
 from PyEMD import EMD
@@ -388,7 +388,7 @@ def infer_time_series_params(
 # Feature Extractors
 # ====================
 
-def extract_datetime_features(series: pd.Series, config: dict, frequency) -> pd.DataFrame:
+def extract_datetime_features(series: pd.Series, config: dict) -> pd.DataFrame:
     """Extract datetime-based features from series index."""
     features = pd.DataFrame(index=series.index)
     dt = series.index
@@ -410,117 +410,69 @@ def extract_datetime_features(series: pd.Series, config: dict, frequency) -> pd.
         
     return features
 
-def extract_lag_features(series: pd.Series, config: dict, frequency) -> pd.DataFrame:
+def extract_lag_features(series: pd.Series, config: dict) -> pd.DataFrame:
     """Generate lag features using config['lags']."""
     features = pd.DataFrame(index=series.index)
-    try:
-        for lag in config['lags']:
-            try:
-                features[f'lag_{lag}'] = series.shift(lag)
-            except Exception as e:
-                print(f"Error creating lag {lag}: {str(e)}")
-    except:
+    for lag in config['lags']:
         try:
-            lags = FREQ_CONFIG[frequency]['lags']
-            for lag in lags:
-                try:
-                    features[f'lag_{lag}'] = series.shift(lag)
-                except Exception as e:
-                    print(f"Error creating lag {lag}: {str(e)}")         
+            features[f'lag_{lag}'] = series.shift(lag)
         except Exception as e:
-            print("Error in returning lags: ", e)
+            print(f"Error creating lag {lag}: {str(e)}")
     return features
 
-def extract_rolling_features(series: pd.Series, config: dict, frequency) -> pd.DataFrame:
+def extract_rolling_features(series: pd.Series, config: dict) -> pd.DataFrame:
     """Calculate rolling window statistics."""
     features = pd.DataFrame(index=series.index)
     threshold = series.mean()
-    try:
-        for w in config['rolling_windows']:
-            try:
-                window = series.rolling(window=w)
+    
+    for w in config['rolling_windows']:
+        try:
+            window = series.rolling(window=w)
+            
+            # Basic statistics
+            features[f'rolling_mean_{w}'] = window.mean()
+            features[f'rolling_std_{w}'] = window.std()
+            features[f'rolling_min_{w}'] = window.min()
+            features[f'rolling_max_{w}'] = window.max()
+            
+            # Quantiles
+            q25 = window.quantile(0.25)
+            q75 = window.quantile(0.75)
+            features[f'rolling_quantile_25_{w}'] = q25
+            features[f'rolling_quantile_75_{w}'] = q75
+            features[f'rolling_iqr_{w}'] = q75 - q25
+            
+            # Other metrics
+            features[f'rolling_median_{w}'] = window.median()
+            features[f'rolling_sum_{w}'] = window.sum()
+            features[f'rolling_skew_{w}'] = window.skew()
+            features[f'rolling_kurtosis_{w}'] = window.kurt()
+            
+            # Difference features
+            features[f'rolling_diff_{w}'] = series - series.shift(w)
+            features[f'rolling_pct_change_{w}'] = series.pct_change(periods=w)
+            
+            # Boolean counts
+            features[f'rolling_count_above_mean_{w}'] = (
+                (series > threshold).rolling(window=w).sum()
+            )
+            # Dispersion metrics
+            features[f'rolling_cv_{w}'] = features[f'rolling_std_{w}'] / features[f'rolling_mean_{w}']
+            features[f'rolling_zscore_{w}'] = (
+                series - features[f'rolling_mean_{w}']) / features[f'rolling_std_{w}']
                 
-                # Basic statistics
-                features[f'rolling_mean_{w}'] = window.mean()
-                features[f'rolling_std_{w}'] = window.std()
-                features[f'rolling_min_{w}'] = window.min()
-                features[f'rolling_max_{w}'] = window.max()
-                
-                # Quantiles
-                q25 = window.quantile(0.25)
-                q75 = window.quantile(0.75)
-                features[f'rolling_quantile_25_{w}'] = q25
-                features[f'rolling_quantile_75_{w}'] = q75
-                features[f'rolling_iqr_{w}'] = q75 - q25
-                
-                # Other metrics
-                features[f'rolling_median_{w}'] = window.median()
-                features[f'rolling_sum_{w}'] = window.sum()
-                features[f'rolling_skew_{w}'] = window.skew()
-                features[f'rolling_kurtosis_{w}'] = window.kurt()
-                
-                # Difference features
-                features[f'rolling_diff_{w}'] = series - series.shift(w)
-                features[f'rolling_pct_change_{w}'] = series.pct_change(periods=w)
-                
-                # Boolean counts
-                features[f'rolling_count_above_mean_{w}'] = (
-                    (series > threshold).rolling(window=w).sum()
-                )
-                # Dispersion metrics
-                features[f'rolling_cv_{w}'] = features[f'rolling_std_{w}'] / features[f'rolling_mean_{w}']
-                features[f'rolling_zscore_{w}'] = (
-                    series - features[f'rolling_mean_{w}']) / features[f'rolling_std_{w}']
-                    
-            except Exception as e:
-                print(f"Error creating rolling features for window {w}: {str(e)}")
-    except:
-        for w in FREQ_CONFIG[frequency]['rolling_windows']:
-            try:
-                window = series.rolling(window=w)
-                
-                # Basic statistics
-                features[f'rolling_mean_{w}'] = window.mean()
-                features[f'rolling_std_{w}'] = window.std()
-                features[f'rolling_min_{w}'] = window.min()
-                features[f'rolling_max_{w}'] = window.max()
-                
-                # Quantiles
-                q25 = window.quantile(0.25)
-                q75 = window.quantile(0.75)
-                features[f'rolling_quantile_25_{w}'] = q25
-                features[f'rolling_quantile_75_{w}'] = q75
-                features[f'rolling_iqr_{w}'] = q75 - q25
-                
-                # Other metrics
-                features[f'rolling_median_{w}'] = window.median()
-                features[f'rolling_sum_{w}'] = window.sum()
-                features[f'rolling_skew_{w}'] = window.skew()
-                features[f'rolling_kurtosis_{w}'] = window.kurt()
-                
-                # Difference features
-                features[f'rolling_diff_{w}'] = series - series.shift(w)
-                features[f'rolling_pct_change_{w}'] = series.pct_change(periods=w)
-                
-                # Boolean counts
-                features[f'rolling_count_above_mean_{w}'] = (
-                    (series > threshold).rolling(window=w).sum()
-                )
-                # Dispersion metrics
-                features[f'rolling_cv_{w}'] = features[f'rolling_std_{w}'] / features[f'rolling_mean_{w}']
-                features[f'rolling_zscore_{w}'] = (
-                    series - features[f'rolling_mean_{w}']) / features[f'rolling_std_{w}']
-                    
-            except Exception as e:
-                print(f"Error creating rolling features for window {w}: {str(e)}")        
+        except Exception as e:
+            print(f"Error creating rolling features for window {w}: {str(e)}")
+    
     return features
 
-def extract_seasonal_features(series: pd.Series, config: dict, frequency: str) -> pd.DataFrame:
+def extract_seasonal_features(series: pd.Series, config: dict) -> pd.DataFrame:
     """Perform seasonal decomposition."""
     features = pd.DataFrame(index=series.index)
     clean_series = series.dropna()
     
     try:
+        # Additive decomposition
         decomposition = seasonal_decompose(
             clean_series, model='additive', period=config['seasonal_period']
         )
@@ -537,24 +489,11 @@ def extract_seasonal_features(series: pd.Series, config: dict, frequency: str) -
         features['residual_mul'] = decomposition.resid
         
     except Exception as e:
-        print(f"Seasonal decomposition failed w/ infered period: {str(e)}")
-        decomposition = seasonal_decompose(
-            clean_series, model='additive', period=FREQ_CONFIG[frequency]['seasonal_period']
-        )
-        features['trend_add'] = decomposition.trend
-        features['seasonal_add'] = decomposition.seasonal
-        features['residual_add'] = decomposition.resid
-        
-        # Multiplicative decomposition
-        decomposition = seasonal_decompose(
-            clean_series, model='multiplicative', period=FREQ_CONFIG[frequency]['seasonal_period']
-        )
-        features['trend_mul'] = decomposition.trend
-        features['seasonal_mul'] = decomposition.seasonal
-        features['residual_mul'] = decomposition.resid    
+        print(f"Seasonal decomposition failed: {str(e)}")
+    
     return features.reindex(series.index)
 
-def extract_emd_features(series: pd.Series, config: dict, frequency: str) -> pd.DataFrame:
+def extract_emd_features(series: pd.Series, config: dict) -> pd.DataFrame:
     """Empirical Mode Decomposition features."""
     features = pd.DataFrame(index=series.index)
     
@@ -572,7 +511,7 @@ def extract_emd_features(series: pd.Series, config: dict, frequency: str) -> pd.
     
     return features
 
-def extract_arima_features(series: pd.Series, config: dict, frequency: str) -> pd.DataFrame:
+def extract_arima_features(series: pd.Series, config: dict) -> pd.DataFrame:
     """ARIMA model residuals."""
     features = pd.DataFrame(index=series.index)
     
@@ -595,7 +534,7 @@ def extract_arima_features(series: pd.Series, config: dict, frequency: str) -> p
     
     return features
 
-def extract_tsfel_features(series: pd.Series, config: dict, frequency: str) -> pd.DataFrame:
+def extract_tsfel_features(series: pd.Series, config: dict) -> pd.DataFrame:
     """TSFEL features."""
     features = pd.DataFrame(index=series.index)
     
@@ -614,7 +553,7 @@ def extract_tsfel_features(series: pd.Series, config: dict, frequency: str) -> p
     
     return features
 
-def extract_fft_features(series: pd.Series, config: dict, frequency: str) -> pd.DataFrame:
+def extract_fft_features(series: pd.Series, config: dict) -> pd.DataFrame:
     """FFT features."""
     features = pd.DataFrame(index=series.index)
     window_size = config['fft_window']
@@ -638,7 +577,7 @@ def extract_fft_features(series: pd.Series, config: dict, frequency: str) -> pd.
     
     return features
 
-def extract_wavelet_features(series: pd.Series, config: dict, frequency: str) -> pd.DataFrame:
+def extract_wavelet_features(series: pd.Series, config: dict) -> pd.DataFrame:
     """Wavelet transform features."""
     features = pd.DataFrame(index=series.index)
     scales = np.arange(1, 20)
@@ -658,7 +597,7 @@ def extract_wavelet_features(series: pd.Series, config: dict, frequency: str) ->
     
     return features
 
-def extract_micro_fft_features(series: pd.Series, config: dict, frequency: str) -> pd.DataFrame:
+def extract_micro_fft_features(series: pd.Series, config: dict) -> pd.DataFrame:
     """Microstructure FFT features."""
     features = pd.DataFrame(index=series.index)
     micro_window = config['micro_window']
@@ -681,7 +620,7 @@ def extract_micro_fft_features(series: pd.Series, config: dict, frequency: str) 
         print(f"Micro FFT failed: {str(e)}")
     
     return features
-            
+
 # ====================
 # Main Featurization
 # ====================
@@ -717,7 +656,7 @@ def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
 
     # Execute all feature extractors in parallel
     features_list = Parallel(n_jobs=CPU_COUNT, prefer='processes')(
-        delayed(func)(series, config, frequency) for func in feature_functions
+        delayed(func)(series, config) for func in feature_functions
     )
 
     # Combine all features with original data
