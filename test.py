@@ -1,2 +1,2 @@
-from utils_python import test
-test()
+from utils import main
+main()

@@ -11,11 +11,9 @@ import tsfel
 import pywt
 from scipy import signal
 from joblib import Parallel, delayed
-from scipy.stats import rankdata
+import os
 from scipy.signal import find_peaks
 from statsmodels.tsa.stattools import pacf, acf
-from scipy.stats import skew, kurtosis
-from statsmodels.tsa.api import VAR
 import warnings
 from os import cpu_count
 import random
@@ -801,54 +799,66 @@ def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
     # Final cleaning
     return df.ffill().bfill().dropna(how='all', axis=1)
 
+def process_single_series(ts_df, freq, dataset_name):
+    """Process one time series and save to CSV"""
+    try:
+        featurized_df = auto_featurize(ts_df, freq)
+        series_name = ts_df.columns[0]
+        dataset_dir = os.path.join("./data/monash", dataset_name)
+        os.makedirs(dataset_dir, exist_ok=True)
+        file_path = os.path.join(dataset_dir, f"{series_name}.csv")
+        featurized_df.to_csv(file_path)
+        print(f"Saved {series_name} to {file_path}")
+        return True
+    except Exception as e:
+        print(f"Error in {ts_df.columns[0]}: {e}")
+        return False
 
-from time import perf_counter
-from joblib import Parallel, delayed
+def process_dataset(data):
+    """Process all series in a dataset"""
+    s = perf_counter()
+    name, df, freq = data['name'], data['df'], data['freq']
+    print(f"Starting dataset: {name}")
 
-# Assuming these functions are defined/imported:
-# yield_data, prepare_time_series, auto_featurize
+    # Create dataset directory
+    dataset_dir = os.path.join("./data/monash", name)
+    os.makedirs(dataset_dir, exist_ok=True)
 
-def test():
-    def process_single_data(data):
-        try:
-            s = perf_counter()
-            name, df, freq = data['name'], data['df'], data['freq']
-            print(f"Processing {name} with frequency {freq}")
-            
-            # Process individual time series
-            for ts_df in prepare_time_series(df, freq):
-                try:
-                    featurized_df = auto_featurize(ts_df, freq)
-                    print(f"Featurized {ts_df.columns[0]}:\n{featurized_df.head()}")
-                except Exception as e:
-                    print(f"Error in {ts_df.columns[0]}: {e}, skipping series")
-                    continue
-            
-            e = perf_counter()
-            return (name, (e - s) / 60)
-        
-        except Exception as e:
-            print(f"Critical error processing {name}: {e}, skipping dataset")
-            return (name, None)
-
-    def process_time_series(pickle_file_path="./data/monash/monash-df.pkl"):
-        all_data = list(yield_data(pickle_file_path))
-        
-        # Loky is used automatically via backend specification
-        results = Parallel(n_jobs=CPU_COUNT, backend="loky")(
-            delayed(process_single_data)(data) for data in all_data
-        )
-        
-        time_per_df = {k: v for k, v in results if v is not None}
-        print("Successful datasets:", time_per_df)
-        return time_per_df
-
-    total_start = perf_counter()
-    time_per_df = process_time_series()
-    total_end = perf_counter()
+    try:
+        all_series = list(prepare_time_series(df, freq))
+    except Exception as e:
+        print(f"Error preparing {name}: {e}")
+        return (name, None)
     
-    print(f"Total time: {(total_end - total_start)/60:.2f} minutes")
+    if len(all_series) >= 50:
+        all_series = random.sample(all_series, 50)
+
+    results = Parallel(n_jobs=CPU_COUNT)(
+        delayed(process_single_series)(ts_df, freq, name)
+        for ts_df in all_series
+    )
+
+    success_count = sum(results)
+    e = perf_counter()
+    print(f"Finished {name} ({success_count}/{len(all_series)} succeeded)")
+    return (name, (e - s) / 60)
+
+def process_time_series(pickle_path="./data/monash/monash-df.pkl"):
+    """Orchestrate processing of all datasets"""
+    time_per_df = {}
+    for data in yield_data(pickle_path):
+        name, time_taken = process_dataset(data)
+        if time_taken is not None:
+            time_per_df[name] = time_taken
     return time_per_df
 
-if __name__ == "__main__":
-    test()
+def main():
+    total_start = perf_counter()
+    time_per_df = process_time_series()  # Now properly defined
+    total_end = perf_counter()
+    
+    print(f"\nTotal time: {(total_end - total_start)/60:.2f} mins")
+    print("Per-dataset times:", time_per_df)
+
+# if __name__ == "__main__":
+#     main()
