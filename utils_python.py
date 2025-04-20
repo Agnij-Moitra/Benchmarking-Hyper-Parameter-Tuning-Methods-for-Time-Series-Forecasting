@@ -1,24 +1,8 @@
-# cython: language_level=3
-# cython: boundscheck=False
-# cython: wraparound=False
-# cython: nonecheck=False
-# cython: initializedcheck=False
-# cython: cdivision=True
-# cython: infer_types=True
-# cython: profile=False
-# cython: binding=False
-# cython: optimize.unpack_method_calls=True
-# cython: optimize.use_switch=True
-# cython: embedsignature=False
-# cython: overflowcheck=False  
-# cython: autotestdict=False  
-# cython: linetrace=False  
-
+from time import perf_counter
 import pickle
 import pandas as pd
 from typing import Generator, Any
 import numpy as np
-# cimport numpy as np
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import acf
 from PyEMD import EMD
@@ -34,7 +18,9 @@ from scipy.stats import skew, kurtosis
 from statsmodels.tsa.api import VAR
 import warnings
 from os import cpu_count
-
+import random
+random.seed(1027)
+np.random.seed(1027)
 warnings.filterwarnings('ignore')
 
 CPU_COUNT = cpu_count()
@@ -237,7 +223,7 @@ def infer_time_series_params(
         min_length: int = 10) -> dict:
     """
     Infer optimal parameters for time series analysis and forecasting, ensuring parameters
-    do not exceed series length constraints (len(series) > 50 * parameter).
+    do not exceed series length constraints (len(series) > 100 * parameter).
 
     Args:
         series (pd.Series): Input time series with timestamps as index.
@@ -259,7 +245,7 @@ def infer_time_series_params(
 
     series = series.dropna()
     N = len(series)
-    min_cycles = 10  # Require at least 10 cycles for periods/windows
+    min_cycles = 100
 
     # 1. Lag Selection Using PACF
     try:
@@ -267,25 +253,25 @@ def infer_time_series_params(
         pacf_values = pacf(series, nlags=nlags)
         significant_lags = [i + 1 for i,
                             val in enumerate(pacf_values[1:],
-                                             1) if abs(val) > 0.01]
-        lags = [lag for lag in significant_lags if N > 50 * lag]
+                                             1) if abs(val) > 0.05]
+        lags = [lag for lag in significant_lags if N > min_cycles * lag]
         if not lags:
             lags = [lag for lag in FREQ_CONFIG[frequency]
-                    ['lags'] if N > 50 * lag]
+                    ['lags'] if N > min_cycles * lag]
             if not lags:
                 lags = [1]  # Minimum fallback
     except Exception as e:
         print(f"PACF failed: {e}. Using default lags for {frequency}.")
         lags = [lag for lag in FREQ_CONFIG[frequency]
-                ['lags'] if N > 50 * lag] or [1]
+                ['lags'] if N > min_cycles * lag] or [1]
 
     # 2. Seasonal Period Detection
     try:
         # Autocorrelation analysis
-        acf_values = acf(series, nlags=min(N // 2, 52))
-        peaks, properties = find_peaks(acf_values[1:], prominence=0.1)
+        acf_values = acf(series, nlags=min(N // min_cycles, 52))
+        peaks, properties = find_peaks(acf_values[1:], prominence=0.05)
         acf_periods = [p + 1 for p in peaks if N >
-                       50 * (p + 1)]  # Ensure 10 cycles
+                       min_cycles * (p + 1)]
         acf_prominences = properties['prominences'] if acf_periods else []
 
         # Spectral analysis
@@ -294,7 +280,7 @@ def infer_time_series_params(
         valid_freq_indices = np.where(
             (freqs > 0) & (freqs >= min_cycles / N))[0]
         spectral_periods = [int(np.round(1.0 / freqs[i])) for i in valid_freq_indices
-                            if freqs[i] > 0 and N > 50 * int(np.round(1.0 / freqs[i]))]
+                            if freqs[i] > 0 and N > min_cycles * int(np.round(1.0 / freqs[i]))]
         spectral_amplitudes = [spectrum[i]
                                for i in valid_freq_indices] if spectral_periods else []
 
@@ -306,7 +292,7 @@ def infer_time_series_params(
             scores = ([p for p in acf_prominences] +
                       [a / max(spectral_amplitudes) if spectral_amplitudes else 0
                       for a in spectral_amplitudes])
-            valid_periods = [p for p in all_periods if N > 50 * p]
+            valid_periods = [p for p in all_periods if N > min_cycles * p]
             if valid_periods:
                 best_idx = np.argmax([scores[all_periods.index(p)]
                                      for p in valid_periods])
@@ -320,8 +306,7 @@ def infer_time_series_params(
         else:
             seasonal_period = FREQ_CONFIG[frequency]['seasonal_period']
 
-        # Ensure at least two cycles for decomposition
-        if seasonal_period > N // 2:
+        if seasonal_period > N // min_cycles:
             seasonal_period = FREQ_CONFIG[frequency]['seasonal_period']
     except Exception as e:
         print(
@@ -331,19 +316,19 @@ def infer_time_series_params(
     # 3. Rolling Window Parameters
     try:
         base_windows = [2, 3, 4, 5, 10, 15, 30, 48, 52, 60 * 15, 60 * 24]
-        rolling_windows = [w for w in base_windows if N > 50 * w]
+        rolling_windows = [w for w in base_windows if N > min_cycles * w]
         if not rolling_windows:
             rolling_windows = [min(base_windows)]  # Smallest as fallback
     except Exception as e:
         print(
             f"Rolling window inference failed: {e}. Using default for {frequency}.")
         rolling_windows = [w for w in FREQ_CONFIG[frequency]['rolling_windows']
-                           if N > 50 * w] or [min(FREQ_CONFIG[frequency]['rolling_windows'])]
+                           if N > min_cycles * w] or [min(FREQ_CONFIG[frequency]['rolling_windows'])]
 
     # 4. FFT Window Selection
     try:
         possible_fft_windows = [2 ** i for i in range(int(np.log2(N)) + 1)]
-        fft_windows = [w for w in possible_fft_windows if N > 50 * w]
+        fft_windows = [w for w in possible_fft_windows if N > min_cycles * w]
         fft_window = max(fft_windows) if fft_windows else min(
             possible_fft_windows)
     except Exception as e:
@@ -356,7 +341,8 @@ def infer_time_series_params(
         possible_micro_windows = [max(5, seasonal_period //
                                       10), max(5, seasonal_period //
                                                5)] if seasonal_period > 0 else [5]
-        micro_windows = [w for w in possible_micro_windows if N > 50 * w]
+        micro_windows = [
+            w for w in possible_micro_windows if N > min_cycles * w]
         micro_window = min(
             micro_windows) if micro_windows else FREQ_CONFIG[frequency]['micro_window']
     except Exception:
@@ -368,12 +354,12 @@ def infer_time_series_params(
                                   2, seasonal_period *
                                   4] if seasonal_period > 0 else [max(10, N //
                                                                       5)]
-        tsfel_windows = [w for w in possible_tsfel_windows if N > 50 * w]
+        tsfel_windows = [
+            w for w in possible_tsfel_windows if N > min_cycles * w]
         tsfel_window = min(
             tsfel_windows) if tsfel_windows else FREQ_CONFIG[frequency]['tsfel_window']
     except Exception:
         tsfel_window = FREQ_CONFIG[frequency]['tsfel_window']
-
     return {
         'lags': lags,
         'rolling_windows': rolling_windows,
@@ -388,11 +374,14 @@ def infer_time_series_params(
 # Feature Extractors
 # ====================
 
-def extract_datetime_features(series: pd.Series, config: dict) -> pd.DataFrame:
+def extract_datetime_features(
+        series: pd.Series,
+        config: dict,
+        frequency) -> pd.DataFrame:
     """Extract datetime-based features from series index."""
     features = pd.DataFrame(index=series.index)
     dt = series.index
-    
+
     datetime_features = {
         'second': dt.second,
         'minute': dt.minute,
@@ -404,117 +393,208 @@ def extract_datetime_features(series: pd.Series, config: dict) -> pd.DataFrame:
         'quarter': dt.quarter,
         'year': dt.year
     }
-    
+
     for name, values in datetime_features.items():
         features[name] = values
-        
+
     return features
 
-def extract_lag_features(series: pd.Series, config: dict) -> pd.DataFrame:
+
+def extract_lag_features(
+        series: pd.Series,
+        config: dict,
+        frequency) -> pd.DataFrame:
     """Generate lag features using config['lags']."""
     features = pd.DataFrame(index=series.index)
-    for lag in config['lags']:
+    try:
+        for lag in config['lags']:
+            try:
+                features[f'lag_{lag}'] = series.shift(lag)
+            except Exception as e:
+                print(f"Error creating lag {lag}: {str(e)}")
+    except Exception:
         try:
-            features[f'lag_{lag}'] = series.shift(lag)
+            lags = FREQ_CONFIG[frequency]['lags']
+            for lag in lags:
+                try:
+                    features[f'lag_{lag}'] = series.shift(lag)
+                except Exception as e:
+                    print(f"Error creating lag {lag}: {str(e)}")
         except Exception as e:
-            print(f"Error creating lag {lag}: {str(e)}")
+            print("Error in returning lags: ", e)
     return features
 
-def extract_rolling_features(series: pd.Series, config: dict) -> pd.DataFrame:
+
+def extract_rolling_features(
+        series: pd.Series,
+        config: dict,
+        frequency) -> pd.DataFrame:
     """Calculate rolling window statistics."""
     features = pd.DataFrame(index=series.index)
     threshold = series.mean()
-    
-    for w in config['rolling_windows']:
-        try:
-            window = series.rolling(window=w)
-            
-            # Basic statistics
-            features[f'rolling_mean_{w}'] = window.mean()
-            features[f'rolling_std_{w}'] = window.std()
-            features[f'rolling_min_{w}'] = window.min()
-            features[f'rolling_max_{w}'] = window.max()
-            
-            # Quantiles
-            q25 = window.quantile(0.25)
-            q75 = window.quantile(0.75)
-            features[f'rolling_quantile_25_{w}'] = q25
-            features[f'rolling_quantile_75_{w}'] = q75
-            features[f'rolling_iqr_{w}'] = q75 - q25
-            
-            # Other metrics
-            features[f'rolling_median_{w}'] = window.median()
-            features[f'rolling_sum_{w}'] = window.sum()
-            features[f'rolling_skew_{w}'] = window.skew()
-            features[f'rolling_kurtosis_{w}'] = window.kurt()
-            
-            # Difference features
-            features[f'rolling_diff_{w}'] = series - series.shift(w)
-            features[f'rolling_pct_change_{w}'] = series.pct_change(periods=w)
-            
-            # Boolean counts
-            features[f'rolling_count_above_mean_{w}'] = (
-                (series > threshold).rolling(window=w).sum()
-            )
-            # Dispersion metrics
-            features[f'rolling_cv_{w}'] = features[f'rolling_std_{w}'] / features[f'rolling_mean_{w}']
-            features[f'rolling_zscore_{w}'] = (
-                series - features[f'rolling_mean_{w}']) / features[f'rolling_std_{w}']
-                
-        except Exception as e:
-            print(f"Error creating rolling features for window {w}: {str(e)}")
-    
+    try:
+        for w in config['rolling_windows']:
+            try:
+                window = series.rolling(window=w)
+
+                # Basic statistics
+                features[f'rolling_mean_{w}'] = window.mean()
+                features[f'rolling_std_{w}'] = window.std()
+                features[f'rolling_min_{w}'] = window.min()
+                features[f'rolling_max_{w}'] = window.max()
+
+                # Quantiles
+                q25 = window.quantile(0.25)
+                q75 = window.quantile(0.75)
+                features[f'rolling_quantile_25_{w}'] = q25
+                features[f'rolling_quantile_75_{w}'] = q75
+                features[f'rolling_iqr_{w}'] = q75 - q25
+
+                # Other metrics
+                features[f'rolling_median_{w}'] = window.median()
+                features[f'rolling_sum_{w}'] = window.sum()
+                features[f'rolling_skew_{w}'] = window.skew()
+                features[f'rolling_kurtosis_{w}'] = window.kurt()
+
+                # Difference features
+                features[f'rolling_diff_{w}'] = series - series.shift(w)
+                features[f'rolling_pct_change_{w}'] = series.pct_change(
+                    periods=w)
+
+                # Boolean counts
+                features[f'rolling_count_above_mean_{w}'] = (
+                    (series > threshold).rolling(window=w).sum()
+                )
+                # Dispersion metrics
+                features[f'rolling_cv_{w}'] = features[f'rolling_std_{w}'] / \
+                    features[f'rolling_mean_{w}']
+                features[f'rolling_zscore_{w}'] = (
+                    series - features[f'rolling_mean_{w}']) / features[f'rolling_std_{w}']
+
+            except Exception as e:
+                print(
+                    f"Error creating rolling features for window {w}: {str(e)}")
+    except Exception:
+        for w in FREQ_CONFIG[frequency]['rolling_windows']:
+            try:
+                window = series.rolling(window=w)
+
+                # Basic statistics
+                features[f'rolling_mean_{w}'] = window.mean()
+                features[f'rolling_std_{w}'] = window.std()
+                features[f'rolling_min_{w}'] = window.min()
+                features[f'rolling_max_{w}'] = window.max()
+
+                # Quantiles
+                q25 = window.quantile(0.25)
+                q75 = window.quantile(0.75)
+                features[f'rolling_quantile_25_{w}'] = q25
+                features[f'rolling_quantile_75_{w}'] = q75
+                features[f'rolling_iqr_{w}'] = q75 - q25
+
+                # Other metrics
+                features[f'rolling_median_{w}'] = window.median()
+                features[f'rolling_sum_{w}'] = window.sum()
+                features[f'rolling_skew_{w}'] = window.skew()
+                features[f'rolling_kurtosis_{w}'] = window.kurt()
+
+                # Difference features
+                features[f'rolling_diff_{w}'] = series - series.shift(w)
+                features[f'rolling_pct_change_{w}'] = series.pct_change(
+                    periods=w)
+
+                # Boolean counts
+                features[f'rolling_count_above_mean_{w}'] = (
+                    (series > threshold).rolling(window=w).sum()
+                )
+                # Dispersion metrics
+                features[f'rolling_cv_{w}'] = features[f'rolling_std_{w}'] / \
+                    features[f'rolling_mean_{w}']
+                features[f'rolling_zscore_{w}'] = (
+                    series - features[f'rolling_mean_{w}']) / features[f'rolling_std_{w}']
+
+            except Exception as e:
+                print(
+                    f"Error creating rolling features for window {w}: {str(e)}")
     return features
 
-def extract_seasonal_features(series: pd.Series, config: dict) -> pd.DataFrame:
+
+def extract_seasonal_features(
+        series: pd.Series,
+        config: dict,
+        frequency: str) -> pd.DataFrame:
     """Perform seasonal decomposition."""
     features = pd.DataFrame(index=series.index)
     clean_series = series.dropna()
-    
+
     try:
-        # Additive decomposition
         decomposition = seasonal_decompose(
             clean_series, model='additive', period=config['seasonal_period']
         )
         features['trend_add'] = decomposition.trend
         features['seasonal_add'] = decomposition.seasonal
         features['residual_add'] = decomposition.resid
-        
+
         # Multiplicative decomposition
         decomposition = seasonal_decompose(
-            clean_series, model='multiplicative', period=config['seasonal_period']
-        )
+            clean_series,
+            model='multiplicative',
+            period=config['seasonal_period'])
         features['trend_mul'] = decomposition.trend
         features['seasonal_mul'] = decomposition.seasonal
         features['residual_mul'] = decomposition.resid
-        
+
     except Exception as e:
-        print(f"Seasonal decomposition failed: {str(e)}")
-    
+        print(f"Seasonal decomposition failed w/ infered period: {str(e)}")
+        decomposition = seasonal_decompose(
+            clean_series,
+            model='additive',
+            period=FREQ_CONFIG[frequency]['seasonal_period'])
+        features['trend_add'] = decomposition.trend
+        features['seasonal_add'] = decomposition.seasonal
+        features['residual_add'] = decomposition.resid
+
+        # Multiplicative decomposition
+        decomposition = seasonal_decompose(
+            clean_series,
+            model='multiplicative',
+            period=FREQ_CONFIG[frequency]['seasonal_period'])
+        features['trend_mul'] = decomposition.trend
+        features['seasonal_mul'] = decomposition.seasonal
+        features['residual_mul'] = decomposition.resid
     return features.reindex(series.index)
 
-def extract_emd_features(series: pd.Series, config: dict) -> pd.DataFrame:
+
+def extract_emd_features(
+        series: pd.Series,
+        config: dict,
+        frequency: str) -> pd.DataFrame:
     """Empirical Mode Decomposition features."""
     features = pd.DataFrame(index=series.index)
-    
+
     try:
         emd = EMD()
         imfs = emd(series.values)
-        
+
         for i in range(imfs.shape[0]):
             features[f'imf_{i+1}'] = np.nan
             valid_length = min(len(imfs[i]), len(features))
-            features.iloc[-valid_length:, features.columns.get_loc(f'imf_{i+1}')] = imfs[i][-valid_length:]
-            
+            features.iloc[-valid_length:,
+                          features.columns.get_loc(f'imf_{i+1}')] = imfs[i][-valid_length:]
+
     except Exception as e:
         print(f"EMD failed: {str(e)}")
-    
+
     return features
 
-def extract_arima_features(series: pd.Series, config: dict) -> pd.DataFrame:
+
+def extract_arima_features(
+        series: pd.Series,
+        config: dict,
+        frequency: str) -> pd.DataFrame:
     """ARIMA model residuals."""
     features = pd.DataFrame(index=series.index)
-    
+
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -528,16 +608,20 @@ def extract_arima_features(series: pd.Series, config: dict) -> pd.DataFrame:
             features['arima_residual'] = np.nan
             valid_length = min(len(model.resid()), len(features))
             features.iloc[-valid_length:, 0] = model.resid()[-valid_length:]
-            
+
     except Exception as e:
         print(f"ARIMA failed: {str(e)}")
-    
+
     return features
 
-def extract_tsfel_features(series: pd.Series, config: dict) -> pd.DataFrame:
+
+def extract_tsfel_features(
+        series: pd.Series,
+        config: dict,
+        frequency: str) -> pd.DataFrame:
     """TSFEL features."""
     features = pd.DataFrame(index=series.index)
-    
+
     try:
         cfg = tsfel.get_features_by_domain()
         tsfel_features = tsfel.time_series_features_extractor(
@@ -547,17 +631,28 @@ def extract_tsfel_features(series: pd.Series, config: dict) -> pd.DataFrame:
             n_jobs=CPU_COUNT  # Already parallelized at higher level
         )
         features = tsfel_features.add_prefix('tsfel_').reindex(series.index)
-        
-    except Exception as e:
-        print(f"TSFEL failed: {str(e)}")
-    
+
+    except:
+        print(f"TSFEL failed, using default config")
+        cfg = tsfel.get_features_by_domain()
+        tsfel_features = tsfel.time_series_features_extractor(
+            cfg, series,
+            window_size=FREQ_CONFIG[frequency]['tsfel_window'],
+            overlap=0.5,
+            n_jobs=CPU_COUNT  # Already parallelized at higher level
+        )
+        features = tsfel_features.add_prefix('tsfel_').reindex(series.index)
     return features
 
-def extract_fft_features(series: pd.Series, config: dict) -> pd.DataFrame:
+
+def extract_fft_features(
+        series: pd.Series,
+        config: dict,
+        frequency: str) -> pd.DataFrame:
     """FFT features."""
     features = pd.DataFrame(index=series.index)
     window_size = config['fft_window']
-    
+
     try:
         fft_features = []
         for i in range(len(series) - window_size + 1):
@@ -568,20 +663,39 @@ def extract_fft_features(series: pd.Series, config: dict) -> pd.DataFrame:
                 'fft_peak_freq': np.argmax(amplitudes[1:window_size // 2]),
                 'fft_peak_amp': np.max(amplitudes[1:window_size // 2])
             })
-            
-        fft_df = pd.DataFrame(fft_features, index=series.index[window_size - 1:])
+
+        fft_df = pd.DataFrame(fft_features,
+                              index=series.index[window_size - 1:])
         features = features.join(fft_df, how='outer')
-        
-    except Exception as e:
-        print(f"FFT failed: {str(e)}")
-    
+
+    except:
+        print(f"FFT failed, using default config")
+        window_size = FREQ_CONFIG[frequency]['fft_window']
+        fft_features = []
+        for i in range(len(series) - window_size + 1):
+            window = series.iloc[i:i + window_size]
+            fft = np.fft.fft(window)
+            amplitudes = np.abs(fft)
+            fft_features.append({
+                'fft_peak_freq': np.argmax(amplitudes[1:window_size // 2]),
+                'fft_peak_amp': np.max(amplitudes[1:window_size // 2])
+            })
+
+        fft_df = pd.DataFrame(fft_features,
+                              index=series.index[window_size - 1:])
+        features = features.join(fft_df, how='outer')
+
     return features
 
-def extract_wavelet_features(series: pd.Series, config: dict) -> pd.DataFrame:
+
+def extract_wavelet_features(
+        series: pd.Series,
+        config: dict,
+        frequency: str) -> pd.DataFrame:
     """Wavelet transform features."""
     features = pd.DataFrame(index=series.index)
     scales = np.arange(1, 20)
-    
+
     for wavelet in WAVELETS:
         try:
             coeffs, _ = pywt.cwt(series.values, scales, wavelet, method='fft')
@@ -589,19 +703,23 @@ def extract_wavelet_features(series: pd.Series, config: dict) -> pd.DataFrame:
                 col_name = f'wavelet_{wavelet}_{i}'
                 features[col_name] = np.nan
                 valid_length = min(len(coeffs[i]), len(features))
-                features.iloc[-valid_length:, features.columns.get_loc(col_name)] = \
-                    np.abs(coeffs[i][-valid_length:])
-                    
+                features.iloc[-valid_length:, features.columns.get_loc(
+                    col_name)] = np.abs(coeffs[i][-valid_length:])
+
         except Exception as e:
             print(f"Wavelet '{wavelet}' failed: {str(e)}")
-    
+
     return features
 
-def extract_micro_fft_features(series: pd.Series, config: dict) -> pd.DataFrame:
+
+def extract_micro_fft_features(
+        series: pd.Series,
+        config: dict,
+        frequency: str) -> pd.DataFrame:
     """Microstructure FFT features."""
     features = pd.DataFrame(index=series.index)
     micro_window = config['micro_window']
-    
+
     try:
         micro_features = []
         for i in range(len(series) - micro_window + 1):
@@ -612,18 +730,34 @@ def extract_micro_fft_features(series: pd.Series, config: dict) -> pd.DataFrame:
                 'micro_fft_peak': np.argmax(amplitudes[1:micro_window // 2]),
                 'micro_fft_amp': np.max(amplitudes[1:micro_window // 2])
             })
-            
-        micro_df = pd.DataFrame(micro_features, index=series.index[micro_window - 1:])
+
+        micro_df = pd.DataFrame(micro_features,
+                                index=series.index[micro_window - 1:])
         features = features.join(micro_df, how='outer')
-        
+
     except Exception as e:
-        print(f"Micro FFT failed: {str(e)}")
-    
+        print(f"Micro FFT failed: {str(e)}, using default config")
+        micro_window = FREQ_CONFIG[frequency]['micro_window']
+        micro_features = []
+        for i in range(len(series) - micro_window + 1):
+            window = series.iloc[i:i + micro_window]
+            fft = np.fft.fft(window)
+            amplitudes = np.abs(fft)
+            micro_features.append({
+                'micro_fft_peak': np.argmax(amplitudes[1:micro_window // 2]),
+                'micro_fft_amp': np.max(amplitudes[1:micro_window // 2])
+            })
+
+        micro_df = pd.DataFrame(micro_features,
+                                index=series.index[micro_window - 1:])
+        features = features.join(micro_df, how='outer')
+
     return features
 
 # ====================
 # Main Featurization
 # ====================
+
 
 def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
     """
@@ -631,7 +765,8 @@ def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
     Returns DataFrame with original data and extracted features.
     """
     if frequency not in FREQ_MAP:
-        raise ValueError(f"Invalid frequency. Choose from {list(FREQ_MAP.keys())}")
+        raise ValueError(
+            f"Invalid frequency. Choose from {list(FREQ_MAP.keys())}")
 
     if df.empty or len(df.columns) != 1:
         raise ValueError("DataFrame must have exactly one value column")
@@ -656,7 +791,7 @@ def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
 
     # Execute all feature extractors in parallel
     features_list = Parallel(n_jobs=CPU_COUNT, prefer='processes')(
-        delayed(func)(series, config) for func in feature_functions
+        delayed(func)(series, config, frequency) for func in feature_functions
     )
 
     # Combine all features with original data
@@ -665,3 +800,55 @@ def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
 
     # Final cleaning
     return df.ffill().bfill().dropna(how='all', axis=1)
+
+
+from time import perf_counter
+from joblib import Parallel, delayed
+
+# Assuming these functions are defined/imported:
+# yield_data, prepare_time_series, auto_featurize
+
+def test():
+    def process_single_data(data):
+        try:
+            s = perf_counter()
+            name, df, freq = data['name'], data['df'], data['freq']
+            print(f"Processing {name} with frequency {freq}")
+            
+            # Process individual time series
+            for ts_df in prepare_time_series(df, freq):
+                try:
+                    featurized_df = auto_featurize(ts_df, freq)
+                    print(f"Featurized {ts_df.columns[0]}:\n{featurized_df.head()}")
+                except Exception as e:
+                    print(f"Error in {ts_df.columns[0]}: {e}, skipping series")
+                    continue
+            
+            e = perf_counter()
+            return (name, (e - s) / 60)
+        
+        except Exception as e:
+            print(f"Critical error processing {name}: {e}, skipping dataset")
+            return (name, None)
+
+    def process_time_series(pickle_file_path="./data/monash/monash-df.pkl"):
+        all_data = list(yield_data(pickle_file_path))
+        
+        # Loky is used automatically via backend specification
+        results = Parallel(n_jobs=CPU_COUNT, backend="loky")(
+            delayed(process_single_data)(data) for data in all_data
+        )
+        
+        time_per_df = {k: v for k, v in results if v is not None}
+        print("Successful datasets:", time_per_df)
+        return time_per_df
+
+    total_start = perf_counter()
+    time_per_df = process_time_series()
+    total_end = perf_counter()
+    
+    print(f"Total time: {(total_end - total_start)/60:.2f} minutes")
+    return time_per_df
+
+if __name__ == "__main__":
+    test()

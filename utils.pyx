@@ -34,7 +34,9 @@ from scipy.stats import skew, kurtosis
 from statsmodels.tsa.api import VAR
 import warnings
 from os import cpu_count
-
+import random
+random.seed(1027)
+np.random.seed(1027)
 warnings.filterwarnings('ignore')
 
 CPU_COUNT = cpu_count()
@@ -237,7 +239,7 @@ def infer_time_series_params(
         min_length: int = 10) -> dict:
     """
     Infer optimal parameters for time series analysis and forecasting, ensuring parameters
-    do not exceed series length constraints (len(series) > 50 * parameter).
+    do not exceed series length constraints (len(series) > 100 * parameter).
 
     Args:
         series (pd.Series): Input time series with timestamps as index.
@@ -259,7 +261,7 @@ def infer_time_series_params(
 
     series = series.dropna()
     N = len(series)
-    min_cycles = 10  # Require at least 10 cycles for periods/windows
+    min_cycles = 100
 
     # 1. Lag Selection Using PACF
     try:
@@ -267,25 +269,25 @@ def infer_time_series_params(
         pacf_values = pacf(series, nlags=nlags)
         significant_lags = [i + 1 for i,
                             val in enumerate(pacf_values[1:],
-                                             1) if abs(val) > 0.01]
-        lags = [lag for lag in significant_lags if N > 50 * lag]
+                                             1) if abs(val) > 0.05]
+        lags = [lag for lag in significant_lags if N > min_cycles * lag]
         if not lags:
             lags = [lag for lag in FREQ_CONFIG[frequency]
-                    ['lags'] if N > 50 * lag]
+                    ['lags'] if N > min_cycles * lag]
             if not lags:
                 lags = [1]  # Minimum fallback
     except Exception as e:
         print(f"PACF failed: {e}. Using default lags for {frequency}.")
         lags = [lag for lag in FREQ_CONFIG[frequency]
-                ['lags'] if N > 50 * lag] or [1]
+                ['lags'] if N > min_cycles * lag] or [1]
 
     # 2. Seasonal Period Detection
     try:
         # Autocorrelation analysis
-        acf_values = acf(series, nlags=min(N // 2, 52))
-        peaks, properties = find_peaks(acf_values[1:], prominence=0.1)
+        acf_values = acf(series, nlags=min(N // min_cycles, 52))
+        peaks, properties = find_peaks(acf_values[1:], prominence=0.05)
         acf_periods = [p + 1 for p in peaks if N >
-                       50 * (p + 1)]  # Ensure 10 cycles
+                       min_cycles * (p + 1)]
         acf_prominences = properties['prominences'] if acf_periods else []
 
         # Spectral analysis
@@ -294,7 +296,7 @@ def infer_time_series_params(
         valid_freq_indices = np.where(
             (freqs > 0) & (freqs >= min_cycles / N))[0]
         spectral_periods = [int(np.round(1.0 / freqs[i])) for i in valid_freq_indices
-                            if freqs[i] > 0 and N > 50 * int(np.round(1.0 / freqs[i]))]
+                            if freqs[i] > 0 and N > min_cycles * int(np.round(1.0 / freqs[i]))]
         spectral_amplitudes = [spectrum[i]
                                for i in valid_freq_indices] if spectral_periods else []
 
@@ -306,7 +308,7 @@ def infer_time_series_params(
             scores = ([p for p in acf_prominences] +
                       [a / max(spectral_amplitudes) if spectral_amplitudes else 0
                       for a in spectral_amplitudes])
-            valid_periods = [p for p in all_periods if N > 50 * p]
+            valid_periods = [p for p in all_periods if N > min_cycles * p]
             if valid_periods:
                 best_idx = np.argmax([scores[all_periods.index(p)]
                                      for p in valid_periods])
@@ -320,8 +322,7 @@ def infer_time_series_params(
         else:
             seasonal_period = FREQ_CONFIG[frequency]['seasonal_period']
 
-        # Ensure at least two cycles for decomposition
-        if seasonal_period > N // 2:
+        if seasonal_period > N // min_cycles:
             seasonal_period = FREQ_CONFIG[frequency]['seasonal_period']
     except Exception as e:
         print(
@@ -331,19 +332,19 @@ def infer_time_series_params(
     # 3. Rolling Window Parameters
     try:
         base_windows = [2, 3, 4, 5, 10, 15, 30, 48, 52, 60 * 15, 60 * 24]
-        rolling_windows = [w for w in base_windows if N > 50 * w]
+        rolling_windows = [w for w in base_windows if N > min_cycles * w]
         if not rolling_windows:
             rolling_windows = [min(base_windows)]  # Smallest as fallback
     except Exception as e:
         print(
             f"Rolling window inference failed: {e}. Using default for {frequency}.")
         rolling_windows = [w for w in FREQ_CONFIG[frequency]['rolling_windows']
-                           if N > 50 * w] or [min(FREQ_CONFIG[frequency]['rolling_windows'])]
+                           if N > min_cycles * w] or [min(FREQ_CONFIG[frequency]['rolling_windows'])]
 
     # 4. FFT Window Selection
     try:
         possible_fft_windows = [2 ** i for i in range(int(np.log2(N)) + 1)]
-        fft_windows = [w for w in possible_fft_windows if N > 50 * w]
+        fft_windows = [w for w in possible_fft_windows if N > min_cycles * w]
         fft_window = max(fft_windows) if fft_windows else min(
             possible_fft_windows)
     except Exception as e:
@@ -356,7 +357,7 @@ def infer_time_series_params(
         possible_micro_windows = [max(5, seasonal_period //
                                       10), max(5, seasonal_period //
                                                5)] if seasonal_period > 0 else [5]
-        micro_windows = [w for w in possible_micro_windows if N > 50 * w]
+        micro_windows = [w for w in possible_micro_windows if N > min_cycles * w]
         micro_window = min(
             micro_windows) if micro_windows else FREQ_CONFIG[frequency]['micro_window']
     except Exception:
@@ -368,12 +369,11 @@ def infer_time_series_params(
                                   2, seasonal_period *
                                   4] if seasonal_period > 0 else [max(10, N //
                                                                       5)]
-        tsfel_windows = [w for w in possible_tsfel_windows if N > 50 * w]
+        tsfel_windows = [w for w in possible_tsfel_windows if N > min_cycles * w]
         tsfel_window = min(
             tsfel_windows) if tsfel_windows else FREQ_CONFIG[frequency]['tsfel_window']
     except Exception:
         tsfel_window = FREQ_CONFIG[frequency]['tsfel_window']
-
     return {
         'lags': lags,
         'rolling_windows': rolling_windows,
@@ -610,8 +610,15 @@ def extract_tsfel_features(series: pd.Series, config: dict, frequency: str) -> p
         features = tsfel_features.add_prefix('tsfel_').reindex(series.index)
         
     except Exception as e:
-        print(f"TSFEL failed: {str(e)}")
-    
+        print(f"TSFEL failed: {str(e)}, using default config")
+        cfg = tsfel.get_features_by_domain()
+        tsfel_features = tsfel.time_series_features_extractor(
+            cfg, series,
+            window_size=FREQ_CONFIG[frequency]['tsfel_window'],
+            overlap=0.5,
+            n_jobs=CPU_COUNT  # Already parallelized at higher level
+        )
+        features = tsfel_features.add_prefix('tsfel_').reindex(series.index)
     return features
 
 def extract_fft_features(series: pd.Series, config: dict, frequency: str) -> pd.DataFrame:
@@ -634,7 +641,20 @@ def extract_fft_features(series: pd.Series, config: dict, frequency: str) -> pd.
         features = features.join(fft_df, how='outer')
         
     except Exception as e:
-        print(f"FFT failed: {str(e)}")
+        print(f"FFT failed: {str(e)}, using default config")
+        window_size = FREQ_CONFIG[frequency]['fft_window']
+        fft_features = []
+        for i in range(len(series) - window_size + 1):
+            window = series.iloc[i:i + window_size]
+            fft = np.fft.fft(window)
+            amplitudes = np.abs(fft)
+            fft_features.append({
+                'fft_peak_freq': np.argmax(amplitudes[1:window_size // 2]),
+                'fft_peak_amp': np.max(amplitudes[1:window_size // 2])
+            })
+            
+        fft_df = pd.DataFrame(fft_features, index=series.index[window_size - 1:])
+        features = features.join(fft_df, how='outer')
     
     return features
 
@@ -678,7 +698,20 @@ def extract_micro_fft_features(series: pd.Series, config: dict, frequency: str) 
         features = features.join(micro_df, how='outer')
         
     except Exception as e:
-        print(f"Micro FFT failed: {str(e)}")
+        print(f"Micro FFT failed: {str(e)}, using default config")
+        micro_window = FREQ_CONFIG[frequency]['micro_window']
+        micro_features = []
+        for i in range(len(series) - micro_window + 1):
+            window = series.iloc[i:i + micro_window]
+            fft = np.fft.fft(window)
+            amplitudes = np.abs(fft)
+            micro_features.append({
+                'micro_fft_peak': np.argmax(amplitudes[1:micro_window // 2]),
+                'micro_fft_amp': np.max(amplitudes[1:micro_window // 2])
+            })
+            
+        micro_df = pd.DataFrame(micro_features, index=series.index[micro_window - 1:])
+        features = features.join(micro_df, how='outer')
     
     return features
             
@@ -726,3 +759,28 @@ def auto_featurize(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
 
     # Final cleaning
     return df.ffill().bfill().dropna(how='all', axis=1)
+
+from time import perf_counter
+
+def test():
+    def process_time_series(pickle_file_path="./data/monash/monash-df.pkl"):
+        time_per_df = {}
+        for data in yield_data(pickle_file_path):
+            s = perf_counter()
+            name, df, freq = data['name'], data['df'], data['freq']
+            print(f"Processing {name} with frequency {freq}")
+            for ts_df in prepare_time_series(df, freq):
+                try:
+                    featurized_df = auto_featurize(ts_df, freq)
+                    print(
+                        f"Featurized DataFrame for {ts_df.columns[0]}:\n{featurized_df.head()}")
+                except Exception as e:
+                    print(f"Error: {e}, Skipping {ts_df.columns[0]}")
+            e = perf_counter()
+            time_per_df[name] = (e-s)/60
+        print(time_per_df)
+
+    s = perf_counter()
+    process_time_series()
+    e = perf_counter()
+    print("Total time: ", (e-s)/60)
