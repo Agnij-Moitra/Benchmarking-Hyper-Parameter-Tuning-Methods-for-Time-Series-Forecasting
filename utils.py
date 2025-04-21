@@ -145,14 +145,7 @@ def yield_data(
             while True:
                 try:
                     items = list(pickle.load(f).items())[0]
-                    try:
-                        yield {
-                            "name": items[0].split('.')[0],
-                            "df": items[1][0].sample(25_000),
-                            "freq": items[1][1],
-                        }
-                    except Exception:
-                            yield {
+                    yield {
                             "name": items[0].split('.')[0],
                             "df": items[1][0],
                             "freq": items[1][1],
@@ -181,17 +174,7 @@ def prepare_time_series(df, frequency) -> Generator[pd.DataFrame, Any, None]:
         start_time = pd.Timestamp.min
         values = row['series_value']
         try:
-            try:
-                yield pd.DataFrame(
-                    {row['series_name']: pd.Series(
-                        values, index=pd.date_range(
-                            start=start_time, periods=len(values), freq=pandas_freq
-                        )
-                    )
-                    }
-                ).sample(25_000)
-            except Exception:
-                yield pd.DataFrame(
+            yield pd.DataFrame(
                     {row['series_name']: pd.Series(
                         values, index=pd.date_range(
                             start=start_time, periods=len(values), freq=pandas_freq
@@ -199,7 +182,6 @@ def prepare_time_series(df, frequency) -> Generator[pd.DataFrame, Any, None]:
                     )
                     }
                 )
-
         except (pd.errors.OutOfBoundsDatetime, OverflowError):
             try:
                 lo, hi = 1, len(values)
@@ -224,16 +206,8 @@ def prepare_time_series(df, frequency) -> Generator[pd.DataFrame, Any, None]:
                         )
                     )
                     }
-                ).sample(25_000)
-            except Exception:
-                yield pd.DataFrame(
-                    {row['series_name']: pd.Series(
-                        values[:max_len], index=pd.date_range(
-                            start=start_time, periods=max_len, freq=pandas_freq
-                        )
-                    )
-                    }
                 )
+            except Exception:
                 continue
         except Exception:
             continue
@@ -875,9 +849,6 @@ def process_dataset(data):
         del df
         gc.collect()
 
-    if len(all_series) >= 50:
-        all_series = random.sample(all_series, 50)
-
     filtered_series = []
     for i in all_series:
         if not os.path.exists(
@@ -902,16 +873,40 @@ def process_dataset(data):
     return (name, (e - s) / 60)
 
 
-ERRORS_DATA = [r'bitcoin_dataset_without_missing_values', r"tourism_monthly_dataset"]
+# ERRORS_DATA = [r'bitcoin_dataset_without_missing_values', 
+#               r"tourism_monthly_dataset", 
+#               r'wind_farms_minutely_dataset_without_missing_values',
+#	       r'cif_2016_dataset',
+#               r'solar_weekly_dataset',
+#	       r'm1_yearly_dataset',
+#               r'tourism_yearly_dataset',
+#               r'm3_monthly_dataset',
+#               r'm4_monthly_dataset',
+#	       r'm1_quarterly_dataset',
+#	       r'dominick_dataset',
+#	       r'car_parts_dataset_without_missing_values',
+#               r'm4_weekly_dataset',
+#	       r'm3_yearly_dataset',
+#	       r'm1_monthly_dataset',
+#	       r'm4_quarterly_dataset',
+#	       r'm4_yearly_dataset', 
+#	       "electricity_hourly_dataset", 
+#	       "m3_quarterly_dataset", 
+#	       "london_smart_meters_dataset_without_missing_values", 
+#	       "hospital_dataset", 
+#	       "tourism_quarterly_dataset",
+#               ]
+
+COMPLETED_DATA = ["covid_deaths_dataset", "dominick_dataset", "fred_md_dataset", "kaggle_web_traffic_dataset_without_missing_values", "kaggle_web_traffic_weekly_dataset", "kdd_cup_2018_dataset_without_missing_values", "pedestrian_counts_dataset", "rideshare_dataset_without_missing_values", "saugeenday_dataset", "solar_4_seconds_dataset", "solar_weekly_dataset", "temperature_rain_dataset_without_missing_values", "traffic_hourly_dataset", "traffic_weekly_dataset", "us_births_dataset", "weather_dataset", "weather_dataset", "wind_4_seconds_dataset", "australian_electricity_demand_dataset", "vehicle_trips_dataset_without_missing_values", "nn5_daily_dataset_without_missing_values", "sunspot_dataset_without_missing_values"]
 
 
 def process_time_series(pickle_path="./data/monash/monash-df.pkl"):
     """Orchestrate processing of all datasets"""
     time_per_df = {}
     for data in yield_data(pickle_path):
-        if data['name'] in ERRORS_DATA:
+        if data['name'] not in COMPLETED_DATA:
+            print(f"Skipping {data['name']}, already done or crashes script")
             continue
-        print(f"Starting Dataset: {data['name']}")
         try:
             name, time_taken = process_dataset(data)
             if time_taken is not None:
