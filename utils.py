@@ -145,11 +145,18 @@ def yield_data(
             while True:
                 try:
                     items = list(pickle.load(f).items())[0]
-                    yield {
-                        "name": items[0].split('.')[0],
-                        "df": items[1][0],
-                        "freq": items[1][1],
-                    }
+                    try:
+                        yield {
+                            "name": items[0].split('.')[0],
+                            "df": items[1][0].sample(25_000),
+                            "freq": items[1][1],
+                        }
+                    except Exception:
+                            yield {
+                            "name": items[0].split('.')[0],
+                            "df": items[1][0],
+                            "freq": items[1][1],
+                        }
                 except EOFError:
                     break
     except FileNotFoundError:
@@ -174,14 +181,25 @@ def prepare_time_series(df, frequency) -> Generator[pd.DataFrame, Any, None]:
         start_time = pd.Timestamp.min
         values = row['series_value']
         try:
-            yield pd.DataFrame(
-                {row['series_name']: pd.Series(
-                    values, index=pd.date_range(
-                        start=start_time, periods=len(values), freq=pandas_freq
+            try:
+                yield pd.DataFrame(
+                    {row['series_name']: pd.Series(
+                        values, index=pd.date_range(
+                            start=start_time, periods=len(values), freq=pandas_freq
+                        )
                     )
+                    }
+                ).sample(25_000)
+            except Exception:
+                yield pd.DataFrame(
+                    {row['series_name']: pd.Series(
+                        values, index=pd.date_range(
+                            start=start_time, periods=len(values), freq=pandas_freq
+                        )
+                    )
+                    }
                 )
-                }
-            )
+
         except (pd.errors.OutOfBoundsDatetime, OverflowError):
             try:
                 lo, hi = 1, len(values)
@@ -206,13 +224,18 @@ def prepare_time_series(df, frequency) -> Generator[pd.DataFrame, Any, None]:
                         )
                     )
                     }
+                ).sample(25_000)
+            except Exception:
+                yield pd.DataFrame(
+                    {row['series_name']: pd.Series(
+                        values[:max_len], index=pd.date_range(
+                            start=start_time, periods=max_len, freq=pandas_freq
+                        )
+                    )
+                    }
                 )
-            except Exception as inner_e:
-                print(
-                    f"Failed to truncate and recover series {row['series_name']}: {str(inner_e)}")
                 continue
-        except Exception as e:
-            print(e)
+        except Exception:
             continue
 
 
@@ -260,7 +283,7 @@ def infer_time_series_params(
             if not lags:
                 lags = [1]  # Minimum fallback
     except Exception as e:
-        print(f"PACF failed: {e}. Using default lags for {frequency}.")
+        # print(f"PACF failed: {e}. Using default lags for {frequency}.")
         lags = [lag for lag in FREQ_CONFIG[frequency]
                 ['lags'] if N > min_cycles * lag] or [1]
 
@@ -308,8 +331,8 @@ def infer_time_series_params(
         if seasonal_period > N // min_cycles:
             seasonal_period = FREQ_CONFIG[frequency]['seasonal_period']
     except Exception as e:
-        print(
-            f"Seasonal period detection failed: {e}. Using default for {frequency}.")
+        # print(
+        #     f"Seasonal period detection failed: {e}. Using default for {frequency}.")
         seasonal_period = FREQ_CONFIG[frequency]['seasonal_period']
 
     # 3. Rolling Window Parameters
@@ -319,8 +342,8 @@ def infer_time_series_params(
         if not rolling_windows:
             rolling_windows = [min(base_windows)]  # Smallest as fallback
     except Exception as e:
-        print(
-            f"Rolling window inference failed: {e}. Using default for {frequency}.")
+        # print(
+        #     f"Rolling window inference failed: {e}. Using default for {frequency}.")
         rolling_windows = [w for w in FREQ_CONFIG[frequency]['rolling_windows']
                            if N > min_cycles * w] or [min(FREQ_CONFIG[frequency]['rolling_windows'])]
 
@@ -331,8 +354,8 @@ def infer_time_series_params(
         fft_window = max(fft_windows) if fft_windows else min(
             possible_fft_windows)
     except Exception as e:
-        print(
-            f"FFT window inference failed: {e}. Using default for {frequency}.")
+        # print(
+        #     f"FFT window inference failed: {e}. Using default for {frequency}.")
         fft_window = FREQ_CONFIG[frequency]['fft_window']
 
     # 5. Micro Window (Short-Term Patterns)
@@ -410,7 +433,8 @@ def extract_lag_features(
             try:
                 features[f'lag_{lag}'] = series.shift(lag)
             except Exception as e:
-                print(f"Error creating lag {lag}: {str(e)}")
+                # print(f"Error creating lag {lag}: {str(e)}")
+                pass
     except Exception:
         try:
             lags = FREQ_CONFIG[frequency]['lags']
@@ -418,9 +442,11 @@ def extract_lag_features(
                 try:
                     features[f'lag_{lag}'] = series.shift(lag)
                 except Exception as e:
-                    print(f"Error creating lag {lag}: {str(e)}")
+                    # print(f"Error creating lag {lag}: {str(e)}")
+                    pass
         except Exception as e:
-            print("Error in returning lags: ", e)
+            # print("Error in returning lags: ", e)
+            pass
     return features
 
 
@@ -471,8 +497,9 @@ def extract_rolling_features(
                     series - features[f'rolling_mean_{w}']) / features[f'rolling_std_{w}']
 
             except Exception as e:
-                print(
-                    f"Error creating rolling features for window {w}: {str(e)}")
+                # print(
+                #     f"Error creating rolling features for window {w}: {str(e)}")
+                pass
     except Exception:
         for w in FREQ_CONFIG[frequency]['rolling_windows']:
             try:
@@ -513,8 +540,9 @@ def extract_rolling_features(
                     series - features[f'rolling_mean_{w}']) / features[f'rolling_std_{w}']
 
             except Exception as e:
-                print(
-                    f"Error creating rolling features for window {w}: {str(e)}")
+                # print(
+                #     f"Error creating rolling features for window {w}: {str(e)}")
+                pass
     return features
 
 
@@ -543,7 +571,7 @@ def extract_seasonal_features(
             features['seasonal_mul'] = decomposition.seasonal
             features['residual_mul'] = decomposition.resid
         except Exception as e:
-            print(f"Error in multiplicative seasonal decomposition: {e}.")
+            # print(f"Error in multiplicative seasonal decomposition: {e}.")
             pass
     except Exception as e:
         print(f"Seasonal decomposition failed w/ infered period: {str(e)}")
@@ -564,7 +592,7 @@ def extract_seasonal_features(
             features['seasonal_mul'] = decomposition.seasonal
             features['residual_mul'] = decomposition.resid
         except Exception as e:
-            print(f"Error in multiplicative seasonal decomposition: {e}.")
+            # print(f"Error in multiplicative seasonal decomposition: {e}.")
             pass
     return features.reindex(series.index)
 
@@ -587,7 +615,8 @@ def extract_emd_features(
                           features.columns.get_loc(f'imf_{i+1}')] = imfs[i][-valid_length:]
 
     except Exception as e:
-        print(f"EMD failed: {str(e)}")
+        # print(f"EMD failed: {str(e)}")
+        pass
 
     return features
 
@@ -614,7 +643,8 @@ def extract_arima_features(
             features.iloc[-valid_length:, 0] = model.resid()[-valid_length:]
 
     except Exception as e:
-        print(f"ARIMA failed: {str(e)}")
+        # print(f"ARIMA failed: {str(e)}")
+        pass
 
     return features
 
@@ -637,7 +667,7 @@ def extract_tsfel_features(
         features = tsfel_features.add_prefix('tsfel_').reindex(series.index)
 
     except BaseException:
-        print(f"TSFEL failed, using default config")
+        # print(f"TSFEL failed, using default config")
         cfg = tsfel.get_features_by_domain()
         tsfel_features = tsfel.time_series_features_extractor(
             cfg, series,
@@ -673,7 +703,7 @@ def extract_fft_features(
         features = features.join(fft_df, how='outer')
 
     except BaseException:
-        print(f"FFT failed, using default config")
+        # print(f"FFT failed, using default config")
         window_size = FREQ_CONFIG[frequency]['fft_window']
         fft_features = []
         for i in range(len(series) - window_size + 1):
@@ -711,7 +741,8 @@ def extract_wavelet_features(
                     col_name)] = np.abs(coeffs[i][-valid_length:])
 
         except Exception as e:
-            print(f"Wavelet '{wavelet}' failed: {str(e)}")
+            # print(f"Wavelet '{wavelet}' failed: {str(e)}")
+            pass
 
     return features
 
@@ -740,7 +771,7 @@ def extract_micro_fft_features(
         features = features.join(micro_df, how='outer')
 
     except Exception as e:
-        print(f"Micro FFT failed: {str(e)}, using default config")
+        # print(f"Micro FFT failed: {str(e)}, using default config")
         micro_window = FREQ_CONFIG[frequency]['micro_window']
         micro_features = []
         for i in range(len(series) - micro_window + 1):
@@ -816,13 +847,13 @@ def process_single_series(ts_df, freq, dataset_name):
         file_path = os.path.join(dataset_dir, f"{series_name}.csv")
         featurized_df.to_csv(file_path)
         print(f"Saved {series_name} to {file_path}")
+        del featurized_df, ts_df
         return True
     except Exception as e:
-        print(
-            f"Error in {ts_df.columns[0] if not ts_df.empty else 'unknown series'}: {e}")
+        # print(
+        #     f"Error in {ts_df.columns[0] if not ts_df.empty else 'unknown series'}: {e}")
         return False
     finally:
-        del featurized_df, ts_df
         gc.collect()
 
 
@@ -844,17 +875,19 @@ def process_dataset(data):
         del df
         gc.collect()
 
+    if len(all_series) >= 50:
+        all_series = random.sample(all_series, 50)
+
     filtered_series = []
     for i in all_series:
-        filename = f"{i.columns[0]}.csv"
-        filepath = os.path.join(dataset_dir, filename)
-        if not os.path.exists(filepath):
+        if not os.path.exists(
+            os.path.join(
+                dataset_dir,
+                f"{i.columns[0]}.csv")):
             filtered_series.append(i)
 
     all_series = filtered_series
-
-    if len(all_series) >= 50:
-        all_series = random.sample(all_series, 50)
+    print(f"Number of Series Processing: {len(all_series)}")
 
     results = Parallel(n_jobs=CPU_COUNT)(
         delayed(process_single_series)(ts_df, freq, name)
@@ -864,15 +897,21 @@ def process_dataset(data):
     success_count = sum(results)
     e = perf_counter()
     print(f"Finished {name} ({success_count}/{len(all_series)} succeeded)")
-    del all_series, results
+    del filtered_series, all_series, results
     gc.collect()
     return (name, (e - s) / 60)
+
+
+ERRORS_DATA = [r'bitcoin_dataset_without_missing_values', r"tourism_monthly_dataset"]
 
 
 def process_time_series(pickle_path="./data/monash/monash-df.pkl"):
     """Orchestrate processing of all datasets"""
     time_per_df = {}
     for data in yield_data(pickle_path):
+        if data['name'] in ERRORS_DATA:
+            continue
+        print(f"Starting Dataset: {data['name']}")
         try:
             name, time_taken = process_dataset(data)
             if time_taken is not None:
@@ -887,9 +926,14 @@ def process_time_series(pickle_path="./data/monash/monash-df.pkl"):
 
 
 def main():
-    total_start = perf_counter()
-    time_per_df = process_time_series()
-    total_end = perf_counter()
+    try:
+        total_start = perf_counter()
+        time_per_df = process_time_series()
+        total_end = perf_counter()
 
-    print(f"\nTotal time: {(total_end - total_start)/60:.2f} mins")
-    print("Per-dataset times:", time_per_df)
+        print(f"\nTotal time: {(total_end - total_start)/60:.2f} mins")
+        print("Per-dataset times:", time_per_df)
+    except Exception as e:
+        print(f"Feature Extraction Failed: {e}")
+    finally:
+        gc.collect()
