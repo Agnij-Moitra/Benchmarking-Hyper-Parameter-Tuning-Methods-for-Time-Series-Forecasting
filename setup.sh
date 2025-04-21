@@ -44,3 +44,4 @@ python init.py $(find ./data/monash/ -name "*.tsf")
 find "$TARGET_DIR" -type f -name "*.tsf" -exec rm -f {} \;
 autopep8 --in-place --aggressive --aggressive *.py
 python FeatureExtraction.py
+find "$TARGET_DIR" -type f -name "*.pkl" -exec rm -f {} \;
