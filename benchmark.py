@@ -16,7 +16,6 @@ DATA_PATHS = [
     r'./data/monash/rideshare_dataset_without_missing_values/',
     r'./data/monash/saugeenday_dataset/',
     r'./data/monash/solar_4_seconds_dataset/',
-    r'./data/monash/solar_weekly_dataset/',
     r'./data/monash/temperature_rain_dataset_without_missing_values/',
     r'./data/monash/traffic_hourly_dataset/',
     r'./data/monash/traffic_weekly_dataset/',
@@ -54,22 +53,16 @@ def yield_df(directory: str) -> Generator[pd.DataFrame, Any, None]:
 
 
 for directory in DATA_PATHS:
-    if not os.path.exists(directory):
-        print(f"Directory {directory} does not exist, skipping...")
-        continue
-
     print(f"Processing directory: {directory}")
-    # df_list = list(yield_df(directory))
     for df in yield_df(directory):
         try:
-            # Example processing: Print the shape and first few rows of each DataFrame
             print(f"Processing file in {directory}, Shape: {df.shape}")
             pass
         except Exception as e:
             print(f"Error processing DataFrame from {directory}: {e}")
             pass
         finally:
-            del df  # Explicitly delete DataFrame to free memory
-            gc.collect()  # Run garbage collection to ensure memory is freed
+            del df 
+            gc.collect() 
     del directory
     gc.collect()

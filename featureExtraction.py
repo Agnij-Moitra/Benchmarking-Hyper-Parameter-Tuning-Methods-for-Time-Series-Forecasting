@@ -910,7 +910,6 @@ COMPLETED_DATA = [
     "rideshare_dataset_without_missing_values",
     "saugeenday_dataset",
     "solar_4_seconds_dataset",
-    "solar_weekly_dataset",
     "temperature_rain_dataset_without_missing_values",
     "traffic_hourly_dataset",
     "traffic_weekly_dataset",
