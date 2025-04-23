@@ -21,10 +21,9 @@ import random
 random.seed(1027)
 np.random.seed(1027)
 warnings.filterwarnings('ignore')
-
+gc.enable()
 CPU_COUNT = cpu_count()
 
-# Original FREQ_CONFIG and FREQ_MAP
 FREQ_CONFIG = {
     '4_seconds': {
         'lags': [1, 15, 30, 60 * 15],  # 4s, 1m, 2m, 1h
@@ -922,7 +921,8 @@ COMPLETED_DATA = [
     "australian_electricity_demand_dataset",
     "vehicle_trips_dataset_without_missing_values",
     "nn5_daily_dataset_without_missing_values",
-    "sunspot_dataset_without_missing_values"]
+    "sunspot_dataset_without_missing_values"
+]
 
 
 def process_time_series(pickle_path="./data/monash/monash-df.pkl"):
@@ -930,7 +930,7 @@ def process_time_series(pickle_path="./data/monash/monash-df.pkl"):
     time_per_df = {}
     for data in yield_data(pickle_path):
         if data['name'] not in COMPLETED_DATA:
-            print(f"Skipping {data['name']}, already done or crashes script")
+            print(f"Skipping {data['name']}, crashes script")
             continue
         try:
             name, time_taken = process_dataset(data)

@@ -3,6 +3,9 @@ from distutils.util import strtobool
 import pickle
 import sys
 import pandas as pd
+import gc
+gc.enable()
+# -*- coding: utf-8 -*-
 
 # Converts the contents in a .tsf file into a dataframe and returns it along with other meta-data of the dataset: frequency, horizon, whether the dataset contains missing values and whether the series have equal lengths
 #
