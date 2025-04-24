@@ -7,14 +7,18 @@ requires-python = ">=3.10"
 dependencies = [
     "cma>=4.0.0",
     "dehb>=0.1.2",
+    "emd-signal>=1.6.4",
     "hpbandster>=0.7.4",
     "nevergrad>=1.0.12",
     "numpy>=1.26.4",
     "optuna>=4.3.0",
+    "pmdarima>=2.0.4",
     "pyswarm>=0.6",
     "pyswarms>=1.3.0",
+    "pywavelets>=1.8.0",
     "ray[tune]>=2.44.1",
     "scikit-learn>=1.6.1",
     "scikit-optimize>=0.10.2",
     "scipy>=1.15.2",
+    "tsfel>=0.1.9",
 ]

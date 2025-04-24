@@ -18,8 +18,6 @@ from statsmodels.tsa.stattools import pacf, acf
 import warnings
 from os import cpu_count
 import random
-random.seed(1027)
-np.random.seed(1027)
 warnings.filterwarnings('ignore')
 gc.enable()
 CPU_COUNT = cpu_count()
