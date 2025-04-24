@@ -5,12 +5,15 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "cma>=4.0.0",
     "dehb>=0.1.2",
     "hpbandster>=0.7.4",
     "nevergrad>=1.0.12",
     "numpy>=1.26.4",
     "optuna>=4.3.0",
+    "pyswarm>=0.6",
     "pyswarms>=1.3.0",
+    "ray[tune]>=2.44.1",
     "scikit-learn>=1.6.1",
     "scikit-optimize>=0.10.2",
     "scipy>=1.15.2",
